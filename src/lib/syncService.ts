@@ -52,6 +52,35 @@ class SyncService {
   }
 
   private async syncClockIn(entry: PendingTimeEntry): Promise<void> {
+    let selfieUrl = entry.selfie_url;
+
+    if (entry.selfie_url && entry.selfie_url.startsWith('data:image')) {
+      const base64Data = entry.selfie_url.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+      const fileName = `${entry.user_id}/${Date.now()}.jpg`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('employee-photos')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('employee-photos')
+        .getPublicUrl(fileName);
+
+      selfieUrl = publicUrlData.publicUrl;
+    }
+
     const { data: timeEntry, error: entryError } = await supabase
       .from('time_entries')
       .insert({
@@ -59,7 +88,7 @@ class SyncService {
         clock_in: entry.clock_in,
         location_lat: entry.location_lat,
         location_lng: entry.location_lng,
-        selfie_url: entry.selfie_url,
+        selfie_url: selfieUrl,
         is_overtime: entry.is_overtime,
         overtime_type: entry.overtime_type,
       })

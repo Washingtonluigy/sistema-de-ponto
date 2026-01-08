@@ -287,6 +287,15 @@ export default function ClockIn() {
         await checkPendingSync();
         setCapturedImage(null);
 
+        setActiveSession({
+          user_id: user!.id,
+          clock_in_time: clockInTime,
+          current_lat: loc.lat,
+          current_lng: loc.lng,
+          last_updated: clockInTime,
+        });
+        setIsOvertimeSession(overtimeCheck.isOvertime);
+
         setModalTitle('Ponto Salvo Offline');
         setModalMessage('Seu ponto foi salvo localmente e será enviado quando houver internet.');
         setModalOpen(true);
@@ -361,6 +370,8 @@ export default function ClockIn() {
 
         await offlineStorage.addPendingEntry(pendingEntry);
         await checkPendingSync();
+
+        setActiveSession(null);
 
         setModalTitle('Saída Salva Offline');
         setModalMessage('Sua saída foi salva localmente e será enviada quando houver internet.');
