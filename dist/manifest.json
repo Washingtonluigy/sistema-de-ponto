@@ -1,0 +1,17 @@
+{
+  "name": "Ponto Digital",
+  "short_name": "Ponto Digital",
+  "description": "Sistema de controle de ponto digital com suporte offline",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
