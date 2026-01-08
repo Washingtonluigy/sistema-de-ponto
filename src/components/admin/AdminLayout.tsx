@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera, Car, Fuel, BarChart3 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminDashboard from './AdminDashboard';
 import EmployeeTracking from './EmployeeTracking';
 import EmployeeRegistration from './EmployeeRegistration';
 import Reports from './Reports';
 import PhotoRegistry from './PhotoRegistry';
+import VehicleManagement from './VehicleManagement';
+import FuelManagement from './FuelManagement';
+import FuelReports from './FuelReports';
 
-type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos';
+type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos' | 'vehicles' | 'fuel' | 'fuel-reports';
 
 export default function AdminLayout() {
   const [activeMenu, setActiveMenu] = useState<MenuItem>('dashboard');
@@ -20,6 +23,9 @@ export default function AdminLayout() {
     { id: 'registration' as MenuItem, label: 'Cadastrar Colaborador', icon: Users },
     { id: 'photos' as MenuItem, label: 'Registro', icon: Camera },
     { id: 'reports' as MenuItem, label: 'Relatórios', icon: FileText },
+    { id: 'vehicles' as MenuItem, label: 'Veículos', icon: Car },
+    { id: 'fuel' as MenuItem, label: 'Abastecimentos', icon: Fuel },
+    { id: 'fuel-reports' as MenuItem, label: 'Relatórios de Combustível', icon: BarChart3 },
   ];
 
   const renderContent = () => {
@@ -34,6 +40,12 @@ export default function AdminLayout() {
         return <PhotoRegistry />;
       case 'reports':
         return <Reports />;
+      case 'vehicles':
+        return <VehicleManagement />;
+      case 'fuel':
+        return <FuelManagement />;
+      case 'fuel-reports':
+        return <FuelReports />;
       default:
         return <AdminDashboard />;
     }
