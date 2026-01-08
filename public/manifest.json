@@ -1,17 +1,43 @@
 {
-  "name": "Ponto Digital",
+  "name": "Ponto Digital - Sistema de Controle de Ponto",
   "short_name": "Ponto Digital",
-  "description": "Sistema de controle de ponto digital com suporte offline",
+  "description": "Sistema de controle de ponto digital com suporte offline. Registre entradas e saídas mesmo sem internet.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#f59e0b",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "lang": "pt-BR",
+  "dir": "ltr",
   "icons": [
     {
-      "src": "/vite.svg",
+      "src": "/icon.svg",
       "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
       "type": "image/svg+xml"
     }
-  ]
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Bater Ponto",
+      "short_name": "Ponto",
+      "description": "Registrar entrada ou saída",
+      "url": "/",
+      "icons": []
+    }
+  ],
+  "prefer_related_applications": false
 }
