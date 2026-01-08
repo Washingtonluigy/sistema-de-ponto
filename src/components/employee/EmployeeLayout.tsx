@@ -3,6 +3,7 @@ import { Clock, TrendingUp, LogOut, Sun, Menu, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ClockIn from './ClockIn';
 import EmployeeStats from './EmployeeStats';
+import InstallPrompt from '../InstallPrompt';
 
 type MenuItem = 'clockin' | 'stats';
 
@@ -57,6 +58,8 @@ export default function EmployeeLayout() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
+      <InstallPrompt />
+
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}

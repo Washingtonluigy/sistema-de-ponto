@@ -11,6 +11,7 @@ export default function InstallPrompt() {
   const [showButton, setShowButton] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     if (window.matchMedia('(display-mode: standalone)').matches) {
@@ -23,10 +24,21 @@ export default function InstallPrompt() {
       return;
     }
 
+    if (localStorage.getItem('installPromptDismissed') === 'true') {
+      return;
+    }
+
+    const isIOSDevice = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(isIOSDevice);
+
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShowButton(true);
+
+      setTimeout(() => {
+        setShowModal(true);
+      }, 2000);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
@@ -38,12 +50,23 @@ export default function InstallPrompt() {
       localStorage.setItem('appInstalled', 'true');
     });
 
+    if (isIOSDevice && !window.matchMedia('(display-mode: standalone)').matches) {
+      setShowButton(true);
+      setTimeout(() => {
+        setShowModal(true);
+      }, 2000);
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
     };
   }, []);
 
   const handleInstall = async () => {
+    if (isIOS) {
+      return;
+    }
+
     if (!deferredPrompt) return;
 
     deferredPrompt.prompt();
@@ -56,6 +79,11 @@ export default function InstallPrompt() {
       setIsInstalled(true);
       localStorage.setItem('appInstalled', 'true');
     }
+  };
+
+  const handleDismiss = () => {
+    setShowModal(false);
+    localStorage.setItem('installPromptDismissed', 'true');
   };
 
   if (isInstalled || !showButton) return null;
@@ -100,7 +128,7 @@ export default function InstallPrompt() {
 
             <div className="p-6">
               <p className="text-gray-700 mb-4 font-medium">
-                Instale o aplicativo na tela inicial do seu celular para:
+                {isIOS ? 'Adicione à tela inicial para:' : 'Instale o aplicativo na tela inicial do seu celular para:'}
               </p>
 
               <div className="space-y-3 mb-6">
@@ -122,21 +150,49 @@ export default function InstallPrompt() {
                 </div>
               </div>
 
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleInstall}
-                  className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold py-4 rounded-lg hover:from-amber-600 hover:to-orange-700 transition shadow-lg flex items-center justify-center space-x-2"
-                >
-                  <Download className="w-5 h-5" />
-                  <span>Instalar</span>
-                </button>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-6 bg-gray-200 text-gray-700 font-semibold py-4 rounded-lg hover:bg-gray-300 transition"
-                >
-                  Cancelar
-                </button>
-              </div>
+              {isIOS ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm font-semibold text-gray-800 mb-3">Como instalar no iPhone/iPad:</p>
+                    <ol className="space-y-2 text-sm text-gray-700">
+                      <li className="flex items-start">
+                        <span className="font-bold mr-2">1.</span>
+                        <span>Toque no botão <strong>Compartilhar</strong> (quadrado com seta) no Safari</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="font-bold mr-2">2.</span>
+                        <span>Role para baixo e toque em <strong>"Adicionar à Tela Inicial"</strong></span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="font-bold mr-2">3.</span>
+                        <span>Toque em <strong>"Adicionar"</strong> no canto superior direito</span>
+                      </li>
+                    </ol>
+                  </div>
+                  <button
+                    onClick={handleDismiss}
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold py-4 rounded-lg hover:from-amber-600 hover:to-orange-700 transition shadow-lg"
+                  >
+                    Entendi
+                  </button>
+                </div>
+              ) : (
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleInstall}
+                    className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold py-4 rounded-lg hover:from-amber-600 hover:to-orange-700 transition shadow-lg flex items-center justify-center space-x-2"
+                  >
+                    <Download className="w-5 h-5" />
+                    <span>Instalar</span>
+                  </button>
+                  <button
+                    onClick={handleDismiss}
+                    className="px-6 bg-gray-200 text-gray-700 font-semibold py-4 rounded-lg hover:bg-gray-300 transition"
+                  >
+                    Agora Não
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
