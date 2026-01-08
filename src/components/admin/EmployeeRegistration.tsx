@@ -17,6 +17,7 @@ export default function EmployeeRegistration() {
     phone: '',
     job_position: '',
     work_hours: 8,
+    overtime_limit: 30,
     photo_url: '',
     horario_entrada: '08:00',
     horario_saida_almoco: '12:00',
@@ -99,6 +100,7 @@ export default function EmployeeRegistration() {
             phone: formData.phone,
             job_position: formData.job_position,
             work_hours: formData.work_hours,
+            overtime_limit: formData.overtime_limit,
             photo_url: photoUrl,
             horario_entrada: formData.horario_entrada,
             horario_saida_almoco: formData.horario_saida_almoco,
@@ -128,6 +130,7 @@ export default function EmployeeRegistration() {
             phone: formData.phone,
             job_position: formData.job_position,
             work_hours: formData.work_hours,
+            overtime_limit: formData.overtime_limit,
             photo_url: null,
             horario_entrada: formData.horario_entrada,
             horario_saida_almoco: formData.horario_saida_almoco,
@@ -162,6 +165,7 @@ export default function EmployeeRegistration() {
         phone: '',
         job_position: '',
         work_hours: 8,
+        overtime_limit: 30,
         photo_url: '',
         horario_entrada: '08:00',
         horario_saida_almoco: '12:00',
@@ -189,6 +193,7 @@ export default function EmployeeRegistration() {
       phone: employee.phone || '',
       job_position: employee.job_position || '',
       work_hours: employee.work_hours || 8,
+      overtime_limit: employee.overtime_limit || 30,
       photo_url: employee.photo_url || '',
       horario_entrada: employee.horario_entrada || '08:00',
       horario_saida_almoco: employee.horario_saida_almoco || '12:00',
@@ -208,6 +213,7 @@ export default function EmployeeRegistration() {
       phone: '',
       job_position: '',
       work_hours: 8,
+      overtime_limit: 30,
       photo_url: '',
       horario_entrada: '08:00',
       horario_saida_almoco: '12:00',
@@ -318,6 +324,22 @@ export default function EmployeeRegistration() {
                 max="12"
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Limite de Horas Extras (h/mês) *
+              </label>
+              <input
+                type="number"
+                value={formData.overtime_limit}
+                onChange={(e) => setFormData({ ...formData, overtime_limit: parseInt(e.target.value) })}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition"
+                min="0"
+                max="100"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">Horas extras até este limite. Excedente vai para banco de horas.</p>
             </div>
           </div>
 

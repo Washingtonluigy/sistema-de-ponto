@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    const { email, password, full_name, phone, job_position, work_hours, photo_url, horario_entrada, horario_saida_almoco, horario_volta_almoco, horario_saida } = await req.json();
+    const { email, password, full_name, phone, job_position, work_hours, overtime_limit, photo_url, horario_entrada, horario_saida_almoco, horario_volta_almoco, horario_saida } = await req.json();
 
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
@@ -56,6 +56,7 @@ Deno.serve(async (req: Request) => {
         role: 'employee',
         job_position: job_position || '',
         work_hours: work_hours || 8,
+        overtime_limit: overtime_limit || 30,
         photo_url: photo_url || null,
         horario_entrada: horario_entrada || '08:00',
         horario_saida_almoco: horario_saida_almoco || '12:00',

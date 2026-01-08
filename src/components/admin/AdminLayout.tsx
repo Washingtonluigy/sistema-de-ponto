@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera, Car, Fuel, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera, Car, Fuel, BarChart3, MinusCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminDashboard from './AdminDashboard';
 import EmployeeTracking from './EmployeeTracking';
@@ -9,8 +9,9 @@ import PhotoRegistry from './PhotoRegistry';
 import VehicleManagement from './VehicleManagement';
 import FuelManagement from './FuelManagement';
 import FuelReports from './FuelReports';
+import HourBankDeduction from './HourBankDeduction';
 
-type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos' | 'vehicles' | 'fuel' | 'fuel-reports';
+type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos' | 'vehicles' | 'fuel' | 'fuel-reports' | 'hour-bank';
 
 export default function AdminLayout() {
   const [activeMenu, setActiveMenu] = useState<MenuItem>('dashboard');
@@ -21,6 +22,7 @@ export default function AdminLayout() {
     { id: 'dashboard' as MenuItem, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tracking' as MenuItem, label: 'Acompanhar Colaboradores', icon: MapPin },
     { id: 'registration' as MenuItem, label: 'Cadastrar Colaborador', icon: Users },
+    { id: 'hour-bank' as MenuItem, label: 'Baixa de Banco de Horas', icon: MinusCircle },
     { id: 'photos' as MenuItem, label: 'Registro', icon: Camera },
     { id: 'reports' as MenuItem, label: 'Relatórios', icon: FileText },
     { id: 'vehicles' as MenuItem, label: 'Veículos', icon: Car },
@@ -36,6 +38,8 @@ export default function AdminLayout() {
         return <EmployeeTracking />;
       case 'registration':
         return <EmployeeRegistration />;
+      case 'hour-bank':
+        return <HourBankDeduction />;
       case 'photos':
         return <PhotoRegistry />;
       case 'reports':

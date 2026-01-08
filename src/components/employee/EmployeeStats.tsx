@@ -4,10 +4,11 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function EmployeeStats() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [overtime, setOvertime] = useState<number>(0);
   const [hourBank, setHourBank] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const overtimeLimit = profile?.overtime_limit || 30;
 
   useEffect(() => {
     loadStats();
@@ -64,7 +65,7 @@ export default function EmployeeStats() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Horas Extras</p>
-                <p className="text-xs text-gray-500">Limite de 30h/mês</p>
+                <p className="text-xs text-gray-500">Limite de {overtimeLimit}h/mês</p>
               </div>
             </div>
           </div>
@@ -73,7 +74,7 @@ export default function EmployeeStats() {
             <div className="flex items-end justify-between">
               <div>
                 <p className="text-4xl font-bold text-gray-800">{overtime.toFixed(1)}</p>
-                <p className="text-sm text-gray-600">de 30 horas</p>
+                <p className="text-sm text-gray-600">de {overtimeLimit} horas</p>
               </div>
               <TrendingUp className="w-8 h-8 text-amber-600" />
             </div>
@@ -81,14 +82,14 @@ export default function EmployeeStats() {
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className="bg-gradient-to-r from-amber-500 to-orange-600 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min((overtime / 30) * 100, 100)}%` }}
+                style={{ width: `${Math.min((overtime / overtimeLimit) * 100, 100)}%` }}
               ></div>
             </div>
 
             <p className="text-xs text-gray-600">
-              {overtime >= 30
+              {overtime >= overtimeLimit
                 ? 'Limite atingido! Horas adicionais vão para o banco de horas.'
-                : `Restam ${(30 - overtime).toFixed(1)} horas até o limite.`}
+                : `Restam ${(overtimeLimit - overtime).toFixed(1)} horas até o limite.`}
             </p>
           </div>
         </div>
@@ -101,7 +102,7 @@ export default function EmployeeStats() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Banco de Horas</p>
-                <p className="text-xs text-gray-500">Acima de 30h extras</p>
+                <p className="text-xs text-gray-500">Acima de {overtimeLimit}h extras</p>
               </div>
             </div>
           </div>
@@ -120,7 +121,7 @@ export default function EmployeeStats() {
                 Como funciona?
               </p>
               <p className="text-xs text-green-700">
-                As primeiras 30h extras são pagas. Horas acima disso são acumuladas no banco
+                As primeiras {overtimeLimit}h extras são pagas. Horas acima disso são acumuladas no banco
                 de horas para você usar como folga.
               </p>
             </div>

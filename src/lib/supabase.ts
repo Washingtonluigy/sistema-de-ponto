@@ -27,6 +27,7 @@ export type Profile = {
   role: 'admin' | 'employee';
   job_position: string | null;
   work_hours: number;
+  overtime_limit: number;
   photo_url: string | null;
   horario_entrada?: string;
   horario_saida_almoco?: string;
