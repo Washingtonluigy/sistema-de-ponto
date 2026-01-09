@@ -379,7 +379,7 @@ export default function ClockIn() {
         return;
       }
 
-      const { data: lastEntry } = await supabase
+      const { data: lastEntry, error: fetchError } = await supabase
         .from('time_entries')
         .select('*')
         .eq('user_id', user?.id)
@@ -388,12 +388,21 @@ export default function ClockIn() {
         .limit(1)
         .maybeSingle();
 
+      if (fetchError) {
+        console.error('Erro ao buscar última entrada:', fetchError);
+        throw new Error('Erro ao buscar registro de entrada: ' + fetchError.message);
+      }
+
+      if (!lastEntry) {
+        throw new Error('Nenhuma entrada em aberto encontrada. Por favor, registre uma entrada primeiro.');
+      }
+
       if (lastEntry) {
         const clockIn = new Date(lastEntry.clock_in);
         const clockOut = new Date();
         const totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
 
-        await supabase
+        const { error: updateError } = await supabase
           .from('time_entries')
           .update({
             clock_out: clockOut.toISOString(),
@@ -401,10 +410,16 @@ export default function ClockIn() {
           })
           .eq('id', lastEntry.id);
 
+        if (updateError) {
+          console.error('Erro ao atualizar registro de saída:', updateError);
+          throw new Error('Erro ao registrar saída: ' + updateError.message);
+        }
+
         if (lastEntry.is_overtime) {
           const now = new Date();
           const month = now.getMonth() + 1;
           const year = now.getFullYear();
+          const overtimeLimit = profile?.overtime_limit || 30;
 
           const { data: overtime } = await supabase
             .from('overtime_hours')
@@ -418,10 +433,10 @@ export default function ClockIn() {
           const currentHourBank = overtime?.hour_bank || 0;
           const newTotalExtra = currentOvertime + currentHourBank + totalHours;
 
-          const newOvertime = Math.min(newTotalExtra, 30);
-          const newHourBank = Math.max(0, newTotalExtra - 30);
+          const newOvertime = Math.min(newTotalExtra, overtimeLimit);
+          const newHourBank = Math.max(0, newTotalExtra - overtimeLimit);
 
-          await supabase.from('overtime_hours').upsert({
+          const { error: overtimeError } = await supabase.from('overtime_hours').upsert({
             user_id: user?.id,
             month,
             year,
@@ -429,6 +444,10 @@ export default function ClockIn() {
             hour_bank: newHourBank,
             updated_at: new Date().toISOString(),
           });
+
+          if (overtimeError) {
+            console.error('Erro ao atualizar horas extras:', overtimeError);
+          }
         } else {
           const workHours = profile?.work_hours || 8;
           const extraHours = Math.max(0, totalHours - workHours);
@@ -437,6 +456,7 @@ export default function ClockIn() {
             const now = new Date();
             const month = now.getMonth() + 1;
             const year = now.getFullYear();
+            const overtimeLimit = profile?.overtime_limit || 30;
 
             const { data: overtime } = await supabase
               .from('overtime_hours')
@@ -450,10 +470,10 @@ export default function ClockIn() {
             const currentHourBank = overtime?.hour_bank || 0;
             const newTotalExtra = currentOvertime + currentHourBank + extraHours;
 
-            const newOvertime = Math.min(newTotalExtra, 30);
-            const newHourBank = Math.max(0, newTotalExtra - 30);
+            const newOvertime = Math.min(newTotalExtra, overtimeLimit);
+            const newHourBank = Math.max(0, newTotalExtra - overtimeLimit);
 
-            await supabase.from('overtime_hours').upsert({
+            const { error: overtimeError2 } = await supabase.from('overtime_hours').upsert({
               user_id: user?.id,
               month,
               year,
@@ -461,19 +481,28 @@ export default function ClockIn() {
               hour_bank: newHourBank,
               updated_at: new Date().toISOString(),
             });
+
+            if (overtimeError2) {
+              console.error('Erro ao atualizar horas extras:', overtimeError2);
+            }
           }
         }
 
-        await supabase.from('active_sessions').delete().eq('user_id', user?.id);
+        const { error: deleteError } = await supabase.from('active_sessions').delete().eq('user_id', user?.id);
+
+        if (deleteError) {
+          console.error('Erro ao deletar sessão ativa:', deleteError);
+        }
 
         await checkActiveSession();
         setModalTitle('Saída Registrada');
-        setModalMessage('');
+        setModalMessage('Sua saída foi registrada com sucesso!');
         setModalOpen(true);
       }
     } catch (error: any) {
-      setModalTitle('Erro');
-      setModalMessage('Erro ao registrar saída: ' + error.message);
+      console.error('Erro completo ao registrar saída:', error);
+      setModalTitle('Erro ao Registrar Saída');
+      setModalMessage(error.message || 'Ocorreu um erro desconhecido. Por favor, tente novamente.');
       setModalOpen(true);
     } finally {
       setLoading(false);
