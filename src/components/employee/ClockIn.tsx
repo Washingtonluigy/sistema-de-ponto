@@ -349,11 +349,17 @@ export default function ClockIn() {
   };
 
   const handleClockOut = async () => {
+    console.log('[CLOCK OUT] Iniciando registro de saída...');
     setLoading(true);
+
     try {
+      console.log('[CLOCK OUT] User ID:', user?.id);
+      console.log('[CLOCK OUT] Online status:', isOnline);
+
       const clockOutTime = new Date().toISOString();
 
       if (!isOnline) {
+        console.log('[CLOCK OUT] Modo offline detectado');
         const pendingEntry = {
           id: `pending-out-${Date.now()}`,
           user_id: user!.id,
@@ -376,9 +382,11 @@ export default function ClockIn() {
         setModalTitle('Saída Salva Offline');
         setModalMessage('Sua saída foi salva localmente e será enviada quando houver internet.');
         setModalOpen(true);
+        setLoading(false);
         return;
       }
 
+      console.log('[CLOCK OUT] Buscando última entrada em aberto...');
       const { data: lastEntry, error: fetchError } = await supabase
         .from('time_entries')
         .select('*')
@@ -388,34 +396,43 @@ export default function ClockIn() {
         .limit(1)
         .maybeSingle();
 
+      console.log('[CLOCK OUT] Resultado da busca:', { lastEntry, fetchError });
+
       if (fetchError) {
-        console.error('Erro ao buscar última entrada:', fetchError);
+        console.error('[CLOCK OUT] Erro ao buscar última entrada:', fetchError);
         throw new Error('Erro ao buscar registro de entrada: ' + fetchError.message);
       }
 
       if (!lastEntry) {
+        console.error('[CLOCK OUT] Nenhuma entrada em aberto encontrada');
         throw new Error('Nenhuma entrada em aberto encontrada. Por favor, registre uma entrada primeiro.');
       }
 
-      if (lastEntry) {
-        const clockIn = new Date(lastEntry.clock_in);
-        const clockOut = new Date();
-        const totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+      console.log('[CLOCK OUT] Calculando horas trabalhadas...');
+      const clockIn = new Date(lastEntry.clock_in);
+      const clockOut = new Date();
+      const totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
 
-        const { error: updateError } = await supabase
-          .from('time_entries')
-          .update({
-            clock_out: clockOut.toISOString(),
-            total_hours: totalHours,
-          })
-          .eq('id', lastEntry.id);
+      console.log('[CLOCK OUT] Horas trabalhadas:', totalHours);
+      console.log('[CLOCK OUT] Atualizando registro no banco...');
 
-        if (updateError) {
-          console.error('Erro ao atualizar registro de saída:', updateError);
-          throw new Error('Erro ao registrar saída: ' + updateError.message);
-        }
+      const { error: updateError } = await supabase
+        .from('time_entries')
+        .update({
+          clock_out: clockOut.toISOString(),
+          total_hours: totalHours,
+        })
+        .eq('id', lastEntry.id);
 
-        if (lastEntry.is_overtime) {
+      if (updateError) {
+        console.error('[CLOCK OUT] Erro ao atualizar registro de saída:', updateError);
+        throw new Error('Erro ao registrar saída: ' + updateError.message);
+      }
+
+      console.log('[CLOCK OUT] Registro atualizado com sucesso!');
+
+      if (lastEntry.is_overtime) {
+        console.log('[CLOCK OUT] Processando horas extras (overtime session)...');
           const now = new Date();
           const month = now.getMonth() + 1;
           const year = now.getFullYear();
@@ -488,23 +505,30 @@ export default function ClockIn() {
           }
         }
 
-        const { error: deleteError } = await supabase.from('active_sessions').delete().eq('user_id', user?.id);
+      console.log('[CLOCK OUT] Removendo sessão ativa...');
+      const { error: deleteError } = await supabase.from('active_sessions').delete().eq('user_id', user?.id);
 
-        if (deleteError) {
-          console.error('Erro ao deletar sessão ativa:', deleteError);
-        }
-
-        await checkActiveSession();
-        setModalTitle('Saída Registrada');
-        setModalMessage('Sua saída foi registrada com sucesso!');
-        setModalOpen(true);
+      if (deleteError) {
+        console.error('[CLOCK OUT] Erro ao deletar sessão ativa:', deleteError);
+      } else {
+        console.log('[CLOCK OUT] Sessão ativa removida com sucesso!');
       }
+
+      console.log('[CLOCK OUT] Atualizando estado local...');
+      await checkActiveSession();
+
+      console.log('[CLOCK OUT] Processo finalizado com sucesso!');
+      setModalTitle('Saída Registrada');
+      setModalMessage('Sua saída foi registrada com sucesso!');
+      setModalOpen(true);
     } catch (error: any) {
-      console.error('Erro completo ao registrar saída:', error);
+      console.error('[CLOCK OUT] ERRO COMPLETO:', error);
+      console.error('[CLOCK OUT] Stack trace:', error.stack);
       setModalTitle('Erro ao Registrar Saída');
       setModalMessage(error.message || 'Ocorreu um erro desconhecido. Por favor, tente novamente.');
       setModalOpen(true);
     } finally {
+      console.log('[CLOCK OUT] Resetando estado de loading...');
       setLoading(false);
     }
   };
