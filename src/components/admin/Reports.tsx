@@ -73,12 +73,33 @@ export default function Reports() {
     const workbook = XLSX.utils.book_new();
 
     const resumoData = data.map((r) => {
-      const diasTrabalhados = new Set(
-        r.entries.filter(e => e.clock_out).map(e => new Date(e.clock_in).toLocaleDateString())
-      ).size;
+      const workHours = r.profile.work_hours || 8;
 
+      const entriesByDay = new Map<string, TimeEntry[]>();
+      r.entries
+        .filter(e => e.clock_out)
+        .forEach(entry => {
+          const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
+          if (!entriesByDay.has(dateKey)) {
+            entriesByDay.set(dateKey, []);
+          }
+          entriesByDay.get(dateKey)!.push(entry);
+        });
+
+      let totalExtraHours = 0;
+      entriesByDay.forEach((dayEntries) => {
+        const totalHoursDay = dayEntries.reduce((sum, e) => sum + (e.total_hours || 0), 0);
+        const extraHoursDay = Math.max(0, totalHoursDay - workHours);
+        totalExtraHours += extraHoursDay;
+      });
+
+      const diasTrabalhados = entriesByDay.size;
       const totalEntradas = r.entries.filter(e => e.clock_in).length;
       const totalSaidas = r.entries.filter(e => e.clock_out).length;
+
+      const overtimeLimit = r.profile.overtime_limit || 30;
+      const overtimePaid = Math.min(totalExtraHours, overtimeLimit);
+      const hourBankAccumulated = Math.max(0, totalExtraHours - overtimeLimit);
 
       return {
         'Nome': r.profile.full_name,
@@ -87,8 +108,9 @@ export default function Reports() {
         'Total Entradas': totalEntradas,
         'Total Saídas': totalSaidas,
         'Total Horas': Number(r.totalHours.toFixed(2)),
-        'Horas Extras (até 30h)': Number(r.overtimeHours.toFixed(2)),
-        'Banco de Horas (>30h)': Number(r.hourBank.toFixed(2)),
+        'Total Horas Extras': Number(totalExtraHours.toFixed(2)),
+        'Horas Extras Pagas (até 30h)': Number(overtimePaid.toFixed(2)),
+        'Banco de Horas (>30h)': Number(hourBankAccumulated.toFixed(2)),
       };
     });
 
@@ -101,37 +123,59 @@ export default function Reports() {
       { wch: 15 },
       { wch: 15 },
       { wch: 15 },
-      { wch: 22 },
+      { wch: 20 },
+      { wch: 25 },
       { wch: 22 },
     ];
 
-    wsResumo['!autofilter'] = { ref: `A1:H${resumoData.length + 1}` };
+    wsResumo['!autofilter'] = { ref: `A1:I${resumoData.length + 1}` };
 
     XLSX.utils.book_append_sheet(workbook, wsResumo, 'Resumo Geral');
 
     const detalhamentoData: any[] = [];
     data.forEach((r) => {
+      const workHours = r.profile.work_hours || 8;
+
+      const entriesByDay = new Map<string, TimeEntry[]>();
       r.entries
         .filter(e => e.clock_out)
-        .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
-        .forEach((entry) => {
-          const clockInDate = new Date(entry.clock_in);
-          const clockOutDate = entry.clock_out ? new Date(entry.clock_out) : null;
-
-          detalhamentoData.push({
-            'Nome': r.profile.full_name,
-            'Função': r.profile.job_position || '-',
-            'Data': clockInDate.toLocaleDateString('pt-BR'),
-            'Dia da Semana': clockInDate.toLocaleDateString('pt-BR', { weekday: 'long' }),
-            'Entrada': clockInDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            'Saída': clockOutDate ? clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-',
-            'Horas Trabalhadas': Number((entry.total_hours || 0).toFixed(2)),
-            'Hora Extra?': entry.is_overtime ? 'Sim' : 'Não',
-            'Tipo': entry.overtime_type === 'after_hours' ? 'Após Expediente' :
-                    entry.overtime_type === 'weekend' ? 'Fim de Semana' :
-                    entry.overtime_type === 'holiday' ? 'Feriado' : 'Normal',
-          });
+        .forEach(entry => {
+          const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
+          if (!entriesByDay.has(dateKey)) {
+            entriesByDay.set(dateKey, []);
+          }
+          entriesByDay.get(dateKey)!.push(entry);
         });
+
+      entriesByDay.forEach((dayEntries, dateKey) => {
+        const totalHoursDay = dayEntries.reduce((sum, e) => sum + (e.total_hours || 0), 0);
+        const extraHoursDay = Math.max(0, totalHoursDay - workHours);
+        const hasOvertime = extraHoursDay > 0;
+
+        dayEntries
+          .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
+          .forEach((entry) => {
+            const clockInDate = new Date(entry.clock_in);
+            const clockOutDate = entry.clock_out ? new Date(entry.clock_out) : null;
+
+            detalhamentoData.push({
+              'Nome': r.profile.full_name,
+              'Função': r.profile.job_position || '-',
+              'Data': clockInDate.toLocaleDateString('pt-BR'),
+              'Dia da Semana': clockInDate.toLocaleDateString('pt-BR', { weekday: 'long' }),
+              'Entrada': clockInDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              'Saída': clockOutDate ? clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-',
+              'Horas Trabalhadas': Number((entry.total_hours || 0).toFixed(2)),
+              'Total Horas do Dia': Number(totalHoursDay.toFixed(2)),
+              'Hora Extra?': hasOvertime ? 'Sim' : 'Não',
+              'Horas Extras do Dia': Number(extraHoursDay.toFixed(2)),
+              'Tipo': entry.overtime_type === 'after_hours' ? 'Após Expediente' :
+                      entry.overtime_type === 'weekend' ? 'Fim de Semana' :
+                      entry.overtime_type === 'holiday' ? 'Feriado' :
+                      hasOvertime ? 'Extra' : 'Normal',
+            });
+          });
+      });
     });
 
     const wsDetalhamento = XLSX.utils.json_to_sheet(detalhamentoData);
@@ -144,11 +188,13 @@ export default function Reports() {
       { wch: 10 },
       { wch: 10 },
       { wch: 18 },
+      { wch: 18 },
       { wch: 12 },
+      { wch: 18 },
       { wch: 20 },
     ];
 
-    wsDetalhamento['!autofilter'] = { ref: `A1:I${detalhamentoData.length + 1}` };
+    wsDetalhamento['!autofilter'] = { ref: `A1:K${detalhamentoData.length + 1}` };
 
     XLSX.utils.book_append_sheet(workbook, wsDetalhamento, 'Detalhamento Completo');
 
