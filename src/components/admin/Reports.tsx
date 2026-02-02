@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, FileText, Calendar, TrendingUp } from 'lucide-react';
 import { supabase, Profile, TimeEntry, OvertimeHours } from '../../lib/supabase';
+import * as XLSX from 'xlsx';
 
 type EmployeeReport = {
   profile: Profile;
@@ -69,24 +70,93 @@ export default function Reports() {
   };
 
   const exportToExcel = (data: EmployeeReport[]) => {
-    const csvContent = [
-      ['Nome', 'Função', 'Total Horas', 'Horas Extras (até 30h)', 'Banco de Horas (>30h)'],
-      ...data.map((r) => [
-        r.profile.full_name,
-        r.profile.job_position || '-',
-        r.totalHours.toFixed(2),
-        r.overtimeHours.toFixed(2),
-        r.hourBank.toFixed(2),
-      ]),
-    ]
-      .map((row) => row.join(','))
-      .join('\n');
+    const workbook = XLSX.utils.book_new();
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `relatorio_${selectedMonth}_${selectedYear}.csv`;
-    link.click();
+    const resumoData = data.map((r) => {
+      const diasTrabalhados = new Set(
+        r.entries.filter(e => e.clock_out).map(e => new Date(e.clock_in).toLocaleDateString())
+      ).size;
+
+      const totalEntradas = r.entries.filter(e => e.clock_in).length;
+      const totalSaidas = r.entries.filter(e => e.clock_out).length;
+
+      return {
+        'Nome': r.profile.full_name,
+        'Função': r.profile.job_position || '-',
+        'Dias Trabalhados': diasTrabalhados,
+        'Total Entradas': totalEntradas,
+        'Total Saídas': totalSaidas,
+        'Total Horas': Number(r.totalHours.toFixed(2)),
+        'Horas Extras (até 30h)': Number(r.overtimeHours.toFixed(2)),
+        'Banco de Horas (>30h)': Number(r.hourBank.toFixed(2)),
+      };
+    });
+
+    const wsResumo = XLSX.utils.json_to_sheet(resumoData);
+
+    wsResumo['!cols'] = [
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 22 },
+      { wch: 22 },
+    ];
+
+    wsResumo['!autofilter'] = { ref: `A1:H${resumoData.length + 1}` };
+
+    XLSX.utils.book_append_sheet(workbook, wsResumo, 'Resumo Geral');
+
+    const detalhamentoData: any[] = [];
+    data.forEach((r) => {
+      r.entries
+        .filter(e => e.clock_out)
+        .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
+        .forEach((entry) => {
+          const clockInDate = new Date(entry.clock_in);
+          const clockOutDate = entry.clock_out ? new Date(entry.clock_out) : null;
+
+          detalhamentoData.push({
+            'Nome': r.profile.full_name,
+            'Função': r.profile.job_position || '-',
+            'Data': clockInDate.toLocaleDateString('pt-BR'),
+            'Dia da Semana': clockInDate.toLocaleDateString('pt-BR', { weekday: 'long' }),
+            'Entrada': clockInDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            'Saída': clockOutDate ? clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-',
+            'Horas Trabalhadas': Number((entry.total_hours || 0).toFixed(2)),
+            'Hora Extra?': entry.is_overtime ? 'Sim' : 'Não',
+            'Tipo': entry.overtime_type === 'after_hours' ? 'Após Expediente' :
+                    entry.overtime_type === 'weekend' ? 'Fim de Semana' :
+                    entry.overtime_type === 'holiday' ? 'Feriado' : 'Normal',
+          });
+        });
+    });
+
+    const wsDetalhamento = XLSX.utils.json_to_sheet(detalhamentoData);
+
+    wsDetalhamento['!cols'] = [
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 18 },
+      { wch: 12 },
+      { wch: 20 },
+    ];
+
+    wsDetalhamento['!autofilter'] = { ref: `A1:I${detalhamentoData.length + 1}` };
+
+    XLSX.utils.book_append_sheet(workbook, wsDetalhamento, 'Detalhamento Completo');
+
+    const fileName = selectedEmployee === 'all'
+      ? `Relatorio_Completo_${selectedMonth.toString().padStart(2, '0')}_${selectedYear}.xlsx`
+      : `Relatorio_${data[0]?.profile.full_name.replace(/\s/g, '_')}_${selectedMonth.toString().padStart(2, '0')}_${selectedYear}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
   };
 
   const exportToTxt = (data: EmployeeReport[]) => {
