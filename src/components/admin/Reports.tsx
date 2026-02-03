@@ -86,16 +86,12 @@ export default function Reports() {
           entriesByDay.get(dateKey)!.push(entry);
         });
 
-      let totalExtraHours = 0;
-      entriesByDay.forEach((dayEntries) => {
-        const totalHoursDay = dayEntries.reduce((sum, e) => sum + (e.total_hours || 0), 0);
-        const extraHoursDay = Math.max(0, totalHoursDay - workHours);
-        totalExtraHours += extraHoursDay;
-      });
-
       const diasTrabalhados = entriesByDay.size;
       const totalEntradas = r.entries.filter(e => e.clock_in).length;
       const totalSaidas = r.entries.filter(e => e.clock_out).length;
+
+      const horasEsperadas = diasTrabalhados * workHours;
+      const totalExtraHours = Math.max(0, r.totalHours - horasEsperadas);
 
       const overtimeLimit = r.profile.overtime_limit || 30;
       const overtimePaid = Math.min(totalExtraHours, overtimeLimit);
@@ -107,6 +103,7 @@ export default function Reports() {
         'Dias Trabalhados': diasTrabalhados,
         'Total Entradas': totalEntradas,
         'Total Saídas': totalSaidas,
+        'Horas Esperadas': Number(horasEsperadas.toFixed(2)),
         'Total Horas': Number(r.totalHours.toFixed(2)),
         'Total Horas Extras': Number(totalExtraHours.toFixed(2)),
         'Horas Extras Pagas (até 30h)': Number(overtimePaid.toFixed(2)),
@@ -122,13 +119,14 @@ export default function Reports() {
       { wch: 18 },
       { wch: 15 },
       { wch: 15 },
+      { wch: 18 },
       { wch: 15 },
       { wch: 20 },
       { wch: 25 },
       { wch: 22 },
     ];
 
-    wsResumo['!autofilter'] = { ref: `A1:I${resumoData.length + 1}` };
+    wsResumo['!autofilter'] = { ref: `A1:J${resumoData.length + 1}` };
 
     XLSX.utils.book_append_sheet(workbook, wsResumo, 'Resumo Geral');
 
