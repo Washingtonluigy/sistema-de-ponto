@@ -132,36 +132,21 @@ class SyncService {
       })
       .eq('id', lastEntry.id);
 
-    if (lastEntry.is_overtime || entry.total_hours! > 8) {
-      const now = new Date(entry.clock_out!);
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
+    const now = new Date(entry.clock_out!);
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
 
-      const { data: overtime } = await supabase
-        .from('overtime_hours')
-        .select('*')
-        .eq('user_id', entry.user_id)
-        .eq('month', month)
-        .eq('year', year)
-        .maybeSingle();
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('work_hours, overtime_limit')
+      .eq('id', entry.user_id)
+      .single();
 
-      const hoursToAdd = lastEntry.is_overtime ? totalHours : Math.max(0, totalHours - 8);
-      const currentOvertime = overtime?.overtime_hours || 0;
-      const currentHourBank = overtime?.hour_bank || 0;
-      const newTotalExtra = currentOvertime + currentHourBank + hoursToAdd;
+    const workHours = profile?.work_hours || 8;
+    const overtimeLimit = profile?.overtime_limit || 30;
 
-      const newOvertime = Math.min(newTotalExtra, 30);
-      const newHourBank = Math.max(0, newTotalExtra - 30);
-
-      await supabase.from('overtime_hours').upsert({
-        user_id: entry.user_id,
-        month,
-        year,
-        overtime_hours: newOvertime,
-        hour_bank: newHourBank,
-        updated_at: new Date().toISOString(),
-      });
-    }
+    const { recalculateMonthlyOvertime } = await import('./overtimeCalculator');
+    await recalculateMonthlyOvertime(entry.user_id, month, year, workHours, overtimeLimit);
 
     await supabase.from('active_sessions').delete().eq('user_id', entry.user_id);
   }

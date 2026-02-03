@@ -431,79 +431,15 @@ export default function ClockIn() {
 
       console.log('[CLOCK OUT] Registro atualizado com sucesso!');
 
-      if (lastEntry.is_overtime) {
-        console.log('[CLOCK OUT] Processando horas extras (overtime session)...');
-          const now = new Date();
-          const month = now.getMonth() + 1;
-          const year = now.getFullYear();
-          const overtimeLimit = profile?.overtime_limit || 30;
+      console.log('[CLOCK OUT] Recalculando horas extras do mês...');
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      const workHours = profile?.work_hours || 8;
+      const overtimeLimit = profile?.overtime_limit || 30;
 
-          const { data: overtime } = await supabase
-            .from('overtime_hours')
-            .select('*')
-            .eq('user_id', user?.id)
-            .eq('month', month)
-            .eq('year', year)
-            .maybeSingle();
-
-          const currentOvertime = overtime?.overtime_hours || 0;
-          const currentHourBank = overtime?.hour_bank || 0;
-          const newTotalExtra = currentOvertime + currentHourBank + totalHours;
-
-          const newOvertime = Math.min(newTotalExtra, overtimeLimit);
-          const newHourBank = Math.max(0, newTotalExtra - overtimeLimit);
-
-          const { error: overtimeError } = await supabase.from('overtime_hours').upsert({
-            user_id: user?.id,
-            month,
-            year,
-            overtime_hours: newOvertime,
-            hour_bank: newHourBank,
-            updated_at: new Date().toISOString(),
-          });
-
-          if (overtimeError) {
-            console.error('Erro ao atualizar horas extras:', overtimeError);
-          }
-        } else {
-          const workHours = profile?.work_hours || 8;
-          const extraHours = Math.max(0, totalHours - workHours);
-
-          if (extraHours > 0) {
-            const now = new Date();
-            const month = now.getMonth() + 1;
-            const year = now.getFullYear();
-            const overtimeLimit = profile?.overtime_limit || 30;
-
-            const { data: overtime } = await supabase
-              .from('overtime_hours')
-              .select('*')
-              .eq('user_id', user?.id)
-              .eq('month', month)
-              .eq('year', year)
-              .maybeSingle();
-
-            const currentOvertime = overtime?.overtime_hours || 0;
-            const currentHourBank = overtime?.hour_bank || 0;
-            const newTotalExtra = currentOvertime + currentHourBank + extraHours;
-
-            const newOvertime = Math.min(newTotalExtra, overtimeLimit);
-            const newHourBank = Math.max(0, newTotalExtra - overtimeLimit);
-
-            const { error: overtimeError2 } = await supabase.from('overtime_hours').upsert({
-              user_id: user?.id,
-              month,
-              year,
-              overtime_hours: newOvertime,
-              hour_bank: newHourBank,
-              updated_at: new Date().toISOString(),
-            });
-
-            if (overtimeError2) {
-              console.error('Erro ao atualizar horas extras:', overtimeError2);
-            }
-          }
-        }
+      const { recalculateMonthlyOvertime } = await import('../../lib/overtimeCalculator');
+      await recalculateMonthlyOvertime(user!.id, month, year, workHours, overtimeLimit);
 
       console.log('[CLOCK OUT] Removendo sessão ativa...');
       const { error: deleteError } = await supabase.from('active_sessions').delete().eq('user_id', user?.id);
