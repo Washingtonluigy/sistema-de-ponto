@@ -122,7 +122,8 @@ class SyncService {
 
     const clockIn = new Date(lastEntry.clock_in);
     const clockOut = new Date(entry.clock_out!);
-    const totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+    let totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+    if (totalHours < 0 || totalHours > 24) totalHours = 0;
 
     await supabase
       .from('time_entries')

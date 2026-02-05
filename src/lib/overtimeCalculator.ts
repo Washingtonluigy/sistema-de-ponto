@@ -1,9 +1,15 @@
 import { supabase } from './supabase';
 
-interface TimeEntry {
-  clock_in: string;
-  clock_out: string | null;
-  total_hours: number | null;
+function calculateHoursFromTimestamps(clockIn: string, clockOut: string): number {
+  const start = new Date(clockIn).getTime();
+  const end = new Date(clockOut).getTime();
+  const hours = (end - start) / (1000 * 60 * 60);
+  if (hours < 0 || hours > 24) return 0;
+  return hours;
+}
+
+function isSunday(dateStr: string): boolean {
+  return new Date(dateStr).getDay() === 0;
 }
 
 export async function recalculateMonthlyOvertime(
@@ -24,24 +30,37 @@ export async function recalculateMonthlyOvertime(
     .not('clock_out', 'is', null);
 
   if (!entries || entries.length === 0) {
+    await supabase.from('overtime_hours').upsert({
+      user_id: userId,
+      month,
+      year,
+      overtime_hours: 0,
+      hour_bank: 0,
+      updated_at: new Date().toISOString(),
+    });
     return { overtime: 0, hourBank: 0 };
   }
 
-  const entriesByDay = new Map<string, TimeEntry[]>();
+  const normalDays = new Map<string, number>();
+  let sundayHoursTotal = 0;
 
   entries.forEach((entry) => {
+    const hours = calculateHoursFromTimestamps(entry.clock_in, entry.clock_out!);
     const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
-    if (!entriesByDay.has(dateKey)) {
-      entriesByDay.set(dateKey, []);
+
+    if (isSunday(entry.clock_in)) {
+      sundayHoursTotal += hours;
+    } else {
+      normalDays.set(dateKey, (normalDays.get(dateKey) || 0) + hours);
     }
-    entriesByDay.get(dateKey)!.push(entry);
   });
 
-  const daysWorked = entriesByDay.size;
-  const totalHoursWorked = entries.reduce((sum, e) => sum + (e.total_hours || 0), 0);
+  const normalDaysCount = normalDays.size;
+  const normalHoursTotal = Array.from(normalDays.values()).reduce((sum, h) => sum + h, 0);
+  const expectedNormalHours = normalDaysCount * workHours;
+  const normalOvertime = Math.max(0, normalHoursTotal - expectedNormalHours);
 
-  const expectedHours = daysWorked * workHours;
-  const totalExtraHours = Math.max(0, totalHoursWorked - expectedHours);
+  const totalExtraHours = normalOvertime + sundayHoursTotal;
 
   const overtimePaid = Math.min(totalExtraHours, overtimeLimit);
   const hourBankAccumulated = Math.max(0, totalExtraHours - overtimeLimit);

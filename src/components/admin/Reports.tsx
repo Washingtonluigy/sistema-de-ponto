@@ -45,18 +45,46 @@ export default function Reports() {
         .eq('month', selectedMonth)
         .eq('year', selectedYear);
 
+      const calcHours = (clockIn: string, clockOut: string): number => {
+        const start = new Date(clockIn).getTime();
+        const end = new Date(clockOut).getTime();
+        const hours = (end - start) / (1000 * 60 * 60);
+        if (hours < 0 || hours > 24) return 0;
+        return hours;
+      };
+
       const employeeReports: EmployeeReport[] = (profiles || []).map((profile) => {
         const employeeEntries = (entries || []).filter((e) => e.user_id === profile.id);
-        const totalHours = employeeEntries.reduce((sum, e) => sum + Number(e.total_hours), 0);
-        const expectedHours = profile.work_hours * 22;
-        const extraHours = Math.max(0, totalHours - expectedHours);
-        const overtimeData = overtime?.find((o) => o.user_id === profile.id);
+        const completedEntries = employeeEntries.filter(e => e.clock_out);
+        const workHours = profile.work_hours || 8;
+        const overtimeLimit = profile.overtime_limit || 30;
+
+        const normalDays = new Map<string, number>();
+        let sundayHoursTotal = 0;
+        let totalHours = 0;
+
+        completedEntries.forEach(entry => {
+          const hours = calcHours(entry.clock_in, entry.clock_out!);
+          totalHours += hours;
+          const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
+
+          if (new Date(entry.clock_in).getDay() === 0) {
+            sundayHoursTotal += hours;
+          } else {
+            normalDays.set(dateKey, (normalDays.get(dateKey) || 0) + hours);
+          }
+        });
+
+        const normalHoursTotal = Array.from(normalDays.values()).reduce((sum, h) => sum + h, 0);
+        const expectedNormalHours = normalDays.size * workHours;
+        const normalOvertime = Math.max(0, normalHoursTotal - expectedNormalHours);
+        const totalExtraHours = normalOvertime + sundayHoursTotal;
 
         return {
           profile,
           totalHours,
-          overtimeHours: overtimeData?.overtime_hours || Math.min(extraHours, 30),
-          hourBank: overtimeData?.hour_bank || Math.max(0, extraHours - 30),
+          overtimeHours: Math.min(totalExtraHours, overtimeLimit),
+          hourBank: Math.max(0, totalExtraHours - overtimeLimit),
           entries: employeeEntries,
         };
       });
@@ -69,29 +97,55 @@ export default function Reports() {
     }
   };
 
+  const calcHoursFromTimestamps = (clockIn: string, clockOut: string): number => {
+    const start = new Date(clockIn).getTime();
+    const end = new Date(clockOut).getTime();
+    const hours = (end - start) / (1000 * 60 * 60);
+    if (hours < 0 || hours > 24) return 0;
+    return hours;
+  };
+
+  const isDomingo = (clockIn: string): boolean => {
+    return new Date(clockIn).getDay() === 0;
+  };
+
   const exportToExcel = (data: EmployeeReport[]) => {
     const workbook = XLSX.utils.book_new();
 
     const resumoData = data.map((r) => {
       const workHours = r.profile.work_hours || 8;
+      const completedEntries = r.entries.filter(e => e.clock_out);
 
-      const entriesByDay = new Map<string, TimeEntry[]>();
-      r.entries
-        .filter(e => e.clock_out)
-        .forEach(entry => {
-          const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
-          if (!entriesByDay.has(dateKey)) {
-            entriesByDay.set(dateKey, []);
-          }
-          entriesByDay.get(dateKey)!.push(entry);
-        });
+      const normalDays = new Map<string, number>();
+      let sundayHoursTotal = 0;
+      let totalHoursRecalc = 0;
 
-      const diasTrabalhados = entriesByDay.size;
+      completedEntries.forEach(entry => {
+        const hours = calcHoursFromTimestamps(entry.clock_in, entry.clock_out!);
+        totalHoursRecalc += hours;
+        const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
+
+        if (isDomingo(entry.clock_in)) {
+          sundayHoursTotal += hours;
+        } else {
+          normalDays.set(dateKey, (normalDays.get(dateKey) || 0) + hours);
+        }
+      });
+
+      const normalDaysCount = normalDays.size;
+      const normalHoursTotal = Array.from(normalDays.values()).reduce((sum, h) => sum + h, 0);
+      const expectedNormalHours = normalDaysCount * workHours;
+      const normalOvertime = Math.max(0, normalHoursTotal - expectedNormalHours);
+      const totalExtraHours = normalOvertime + sundayHoursTotal;
+
+      const sundayDays = new Set(
+        completedEntries
+          .filter(e => isDomingo(e.clock_in))
+          .map(e => new Date(e.clock_in).toLocaleDateString('pt-BR'))
+      ).size;
+      const totalDias = normalDaysCount + sundayDays;
       const totalEntradas = r.entries.filter(e => e.clock_in).length;
-      const totalSaidas = r.entries.filter(e => e.clock_out).length;
-
-      const horasEsperadas = diasTrabalhados * workHours;
-      const totalExtraHours = Math.max(0, r.totalHours - horasEsperadas);
+      const totalSaidas = completedEntries.length;
 
       const overtimeLimit = r.profile.overtime_limit || 30;
       const overtimePaid = Math.min(totalExtraHours, overtimeLimit);
@@ -100,14 +154,19 @@ export default function Reports() {
       return {
         'Nome': r.profile.full_name,
         'Função': r.profile.job_position || '-',
-        'Dias Trabalhados': diasTrabalhados,
+        'Dias Trabalhados': totalDias,
+        'Dias Normais (Seg-Sáb)': normalDaysCount,
+        'Domingos Trabalhados': sundayDays,
         'Total Entradas': totalEntradas,
         'Total Saídas': totalSaidas,
-        'Horas Esperadas': Number(horasEsperadas.toFixed(2)),
-        'Total Horas': Number(r.totalHours.toFixed(2)),
+        'Horas Esperadas (Seg-Sáb)': Number(expectedNormalHours.toFixed(2)),
+        'Total Horas Trabalhadas': Number(totalHoursRecalc.toFixed(2)),
+        'Horas Normais (Seg-Sáb)': Number(normalHoursTotal.toFixed(2)),
+        'Horas Domingo (100%)': Number(sundayHoursTotal.toFixed(2)),
+        'Extras Seg-Sáb': Number(normalOvertime.toFixed(2)),
         'Total Horas Extras': Number(totalExtraHours.toFixed(2)),
-        'Horas Extras Pagas (até 30h)': Number(overtimePaid.toFixed(2)),
-        'Banco de Horas (>30h)': Number(hourBankAccumulated.toFixed(2)),
+        'Horas Extras Pagas': Number(overtimePaid.toFixed(2)),
+        'Banco de Horas': Number(hourBankAccumulated.toFixed(2)),
       };
     });
 
@@ -117,44 +176,60 @@ export default function Reports() {
       { wch: 30 },
       { wch: 20 },
       { wch: 18 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 18 },
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 25 },
       { wch: 22 },
+      { wch: 22 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 24 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 18 },
     ];
 
-    wsResumo['!autofilter'] = { ref: `A1:J${resumoData.length + 1}` };
+    wsResumo['!autofilter'] = { ref: `A1:O${resumoData.length + 1}` };
 
     XLSX.utils.book_append_sheet(workbook, wsResumo, 'Resumo Geral');
 
     const detalhamentoData: any[] = [];
     data.forEach((r) => {
       const workHours = r.profile.work_hours || 8;
+      const completedEntries = r.entries.filter(e => e.clock_out);
 
       const entriesByDay = new Map<string, TimeEntry[]>();
-      r.entries
-        .filter(e => e.clock_out)
-        .forEach(entry => {
-          const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
-          if (!entriesByDay.has(dateKey)) {
-            entriesByDay.set(dateKey, []);
-          }
-          entriesByDay.get(dateKey)!.push(entry);
-        });
+      completedEntries.forEach(entry => {
+        const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
+        if (!entriesByDay.has(dateKey)) {
+          entriesByDay.set(dateKey, []);
+        }
+        entriesByDay.get(dateKey)!.push(entry);
+      });
 
-      entriesByDay.forEach((dayEntries, dateKey) => {
-        const totalHoursDay = dayEntries.reduce((sum, e) => sum + (e.total_hours || 0), 0);
-        const extraHoursDay = Math.max(0, totalHoursDay - workHours);
-        const hasOvertime = extraHoursDay > 0;
+      entriesByDay.forEach((dayEntries) => {
+        const sunday = isDomingo(dayEntries[0].clock_in);
+        const totalHoursDay = dayEntries.reduce((sum, e) => {
+          return sum + calcHoursFromTimestamps(e.clock_in, e.clock_out!);
+        }, 0);
+
+        let extraHoursDay: number;
+        let tipo: string;
+        if (sunday) {
+          extraHoursDay = totalHoursDay;
+          tipo = 'Domingo (100%)';
+        } else {
+          extraHoursDay = Math.max(0, totalHoursDay - workHours);
+          tipo = extraHoursDay > 0 ? 'Extra' : 'Normal';
+        }
 
         dayEntries
           .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
           .forEach((entry) => {
             const clockInDate = new Date(entry.clock_in);
-            const clockOutDate = entry.clock_out ? new Date(entry.clock_out) : null;
+            const clockOutDate = new Date(entry.clock_out!);
+            const entryHours = calcHoursFromTimestamps(entry.clock_in, entry.clock_out!);
 
             detalhamentoData.push({
               'Nome': r.profile.full_name,
@@ -162,15 +237,16 @@ export default function Reports() {
               'Data': clockInDate.toLocaleDateString('pt-BR'),
               'Dia da Semana': clockInDate.toLocaleDateString('pt-BR', { weekday: 'long' }),
               'Entrada': clockInDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-              'Saída': clockOutDate ? clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-',
-              'Horas Trabalhadas': Number((entry.total_hours || 0).toFixed(2)),
+              'Saída': clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              'Horas da Sessão': Number(entryHours.toFixed(2)),
               'Total Horas do Dia': Number(totalHoursDay.toFixed(2)),
-              'Hora Extra?': hasOvertime ? 'Sim' : 'Não',
+              'Hora Extra?': (sunday || extraHoursDay > 0) ? 'Sim' : 'Não',
               'Horas Extras do Dia': Number(extraHoursDay.toFixed(2)),
-              'Tipo': entry.overtime_type === 'after_hours' ? 'Após Expediente' :
+              'Tipo': sunday ? 'Domingo (100%)' :
+                      entry.overtime_type === 'after_hours' ? 'Após Expediente' :
                       entry.overtime_type === 'weekend' ? 'Fim de Semana' :
                       entry.overtime_type === 'holiday' ? 'Feriado' :
-                      hasOvertime ? 'Extra' : 'Normal',
+                      tipo,
             });
           });
       });

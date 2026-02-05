@@ -122,7 +122,8 @@ export default function ClockIn() {
       if (lastEntry) {
         const clockIn = new Date(lastEntry.clock_in);
         const clockOut = new Date();
-        const totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+        let totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+        if (totalHours < 0 || totalHours > 24) totalHours = 0;
 
         await supabase
           .from('time_entries')
@@ -151,6 +152,12 @@ export default function ClockIn() {
 
   const isOvertimePeriod = () => {
     if (!profile) return false;
+
+    const now = new Date();
+    const isSunday = now.getDay() === 0;
+    if (isSunday) {
+      return { isOvertime: true, type: 'weekend' };
+    }
 
     const currentMinutes = getCurrentTimeInMinutes();
     const lunchStart = profile.horario_saida_almoco ? timeStringToMinutes(profile.horario_saida_almoco) : null;
@@ -411,7 +418,11 @@ export default function ClockIn() {
       console.log('[CLOCK OUT] Calculando horas trabalhadas...');
       const clockIn = new Date(lastEntry.clock_in);
       const clockOut = new Date();
-      const totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+      let totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+      if (totalHours < 0 || totalHours > 24) {
+        console.warn('[CLOCK OUT] Horas calculadas inválidas:', totalHours, '- resetando para 0');
+        totalHours = 0;
+      }
 
       console.log('[CLOCK OUT] Horas trabalhadas:', totalHours);
       console.log('[CLOCK OUT] Atualizando registro no banco...');
