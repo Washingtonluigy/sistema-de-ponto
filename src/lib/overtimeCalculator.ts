@@ -4,7 +4,7 @@ function calculateHoursFromTimestamps(clockIn: string, clockOut: string): number
   const start = new Date(clockIn).getTime();
   const end = new Date(clockOut).getTime();
   const hours = (end - start) / (1000 * 60 * 60);
-  if (hours < 0 || hours > 24) return 0;
+  if (hours < 0) return 0;
   return hours;
 }
 

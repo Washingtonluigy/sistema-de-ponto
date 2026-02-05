@@ -36,8 +36,8 @@ export default function Reports() {
       const { data: entries } = await supabase
         .from('time_entries')
         .select('*')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
+        .gte('clock_in', startDate.toISOString())
+        .lte('clock_in', endDate.toISOString());
 
       const { data: overtime } = await supabase
         .from('overtime_hours')
@@ -48,9 +48,7 @@ export default function Reports() {
       const calcHours = (clockIn: string, clockOut: string): number => {
         const start = new Date(clockIn).getTime();
         const end = new Date(clockOut).getTime();
-        const hours = (end - start) / (1000 * 60 * 60);
-        if (hours < 0 || hours > 24) return 0;
-        return hours;
+        return Math.max(0, (end - start) / (1000 * 60 * 60));
       };
 
       const employeeReports: EmployeeReport[] = (profiles || []).map((profile) => {
@@ -100,9 +98,7 @@ export default function Reports() {
   const calcHoursFromTimestamps = (clockIn: string, clockOut: string): number => {
     const start = new Date(clockIn).getTime();
     const end = new Date(clockOut).getTime();
-    const hours = (end - start) / (1000 * 60 * 60);
-    if (hours < 0 || hours > 24) return 0;
-    return hours;
+    return Math.max(0, (end - start) / (1000 * 60 * 60));
   };
 
   const isDomingo = (clockIn: string): boolean => {
@@ -231,18 +227,26 @@ export default function Reports() {
             const clockOutDate = new Date(entry.clock_out!);
             const entryHours = calcHoursFromTimestamps(entry.clock_in, entry.clock_out!);
 
+            const saidaDateStr = clockOutDate.toLocaleDateString('pt-BR');
+            const entradaDateStr = clockInDate.toLocaleDateString('pt-BR');
+            const cruzaDia = saidaDateStr !== entradaDateStr;
+            const saidaDisplay = cruzaDia
+              ? `${clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} (${saidaDateStr})`
+              : clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
             detalhamentoData.push({
               'Nome': r.profile.full_name,
               'Função': r.profile.job_position || '-',
-              'Data': clockInDate.toLocaleDateString('pt-BR'),
+              'Data': entradaDateStr,
               'Dia da Semana': clockInDate.toLocaleDateString('pt-BR', { weekday: 'long' }),
               'Entrada': clockInDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-              'Saída': clockOutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              'Saída': saidaDisplay,
               'Horas da Sessão': Number(entryHours.toFixed(2)),
               'Total Horas do Dia': Number(totalHoursDay.toFixed(2)),
               'Hora Extra?': (sunday || extraHoursDay > 0) ? 'Sim' : 'Não',
               'Horas Extras do Dia': Number(extraHoursDay.toFixed(2)),
-              'Tipo': sunday ? 'Domingo (100%)' :
+              'Tipo': cruzaDia ? 'Saída no dia seguinte' :
+                      sunday ? 'Domingo (100%)' :
                       entry.overtime_type === 'after_hours' ? 'Após Expediente' :
                       entry.overtime_type === 'weekend' ? 'Fim de Semana' :
                       entry.overtime_type === 'holiday' ? 'Feriado' :

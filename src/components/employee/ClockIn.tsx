@@ -122,8 +122,7 @@ export default function ClockIn() {
       if (lastEntry) {
         const clockIn = new Date(lastEntry.clock_in);
         const clockOut = new Date();
-        let totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
-        if (totalHours < 0 || totalHours > 24) totalHours = 0;
+        const totalHours = Math.max(0, (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60));
 
         await supabase
           .from('time_entries')
@@ -418,11 +417,7 @@ export default function ClockIn() {
       console.log('[CLOCK OUT] Calculando horas trabalhadas...');
       const clockIn = new Date(lastEntry.clock_in);
       const clockOut = new Date();
-      let totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
-      if (totalHours < 0 || totalHours > 24) {
-        console.warn('[CLOCK OUT] Horas calculadas inválidas:', totalHours, '- resetando para 0');
-        totalHours = 0;
-      }
+      const totalHours = Math.max(0, (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60));
 
       console.log('[CLOCK OUT] Horas trabalhadas:', totalHours);
       console.log('[CLOCK OUT] Atualizando registro no banco...');
