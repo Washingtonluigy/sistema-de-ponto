@@ -29,6 +29,19 @@ export default function ClockIn() {
   const streamRef = useRef<MediaStream | null>(null);
   const checkSessionTimeoutRef = useRef<number | null>(null);
 
+  console.log('[CLOCKIN] Renderizando ClockIn', { hasUser: !!user, hasProfile: !!profile, isOnline });
+
+  if (!user || !profile) {
+    console.error('[CLOCKIN] User ou Profile não disponível');
+    return (
+      <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+        <div className="text-4xl mb-4">⚠️</div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Erro</h2>
+        <p className="text-gray-600">Dados do usuário não disponíveis</p>
+      </div>
+    );
+  }
+
   const checkPendingSync = useCallback(async () => {
     try {
       const pending = await offlineStorage.getPendingEntries();

@@ -10,9 +10,13 @@ export default function EmployeeStats() {
   const [loading, setLoading] = useState(true);
   const overtimeLimit = profile?.overtime_limit || 30;
 
+  console.log('[EMPLOYEE STATS] Renderizando', { hasUser: !!user, hasProfile: !!profile });
+
   useEffect(() => {
-    loadStats();
-  }, [user]);
+    if (user && profile) {
+      loadStats();
+    }
+  }, [user, profile]);
 
   const loadStats = async () => {
     if (!user) return;

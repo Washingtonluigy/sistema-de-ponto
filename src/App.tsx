@@ -63,9 +63,15 @@ class ErrorBoundary extends Component<
 function AppContent() {
   const { user, profile, loading } = useAuth();
 
-  console.log('[APP] Estado:', { hasUser: !!user, hasProfile: !!profile, loading });
+  console.log('[APP] Estado:', {
+    hasUser: !!user,
+    hasProfile: !!profile,
+    role: profile?.role,
+    loading
+  });
 
   if (loading) {
+    console.log('[APP] Estado: Carregando...');
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex items-center justify-center">
         <div className="text-center">
@@ -81,13 +87,40 @@ function AppContent() {
     return <Login />;
   }
 
-  if (profile.role === 'admin') {
-    console.log('[APP] Mostrando layout admin');
-    return <AdminLayout />;
-  }
+  try {
+    if (profile.role === 'admin') {
+      console.log('[APP] Renderizando AdminLayout');
+      return (
+        <ErrorBoundary>
+          <AdminLayout />
+        </ErrorBoundary>
+      );
+    }
 
-  console.log('[APP] Mostrando layout colaborador');
-  return <EmployeeLayout />;
+    console.log('[APP] Renderizando EmployeeLayout');
+    return (
+      <ErrorBoundary>
+        <EmployeeLayout />
+      </ErrorBoundary>
+    );
+  } catch (error) {
+    console.error('[APP] Erro ao renderizar layout:', error);
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Erro ao Carregar</h1>
+          <p className="text-gray-600 mb-6">Não foi possível carregar a interface. Tente novamente.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition shadow-lg"
+          >
+            Recarregar
+          </button>
+        </div>
+      </div>
+    );
+  }
 }
 
 function App() {
