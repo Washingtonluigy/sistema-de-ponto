@@ -12,6 +12,7 @@ export type PendingTimeEntry = {
   selfie_url: string;
   is_overtime: boolean;
   overtime_type: string | null;
+  notes?: string | null;
   total_hours?: number;
   type: 'clock_in' | 'clock_out';
   timestamp: number;

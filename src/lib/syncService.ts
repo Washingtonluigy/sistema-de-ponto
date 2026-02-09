@@ -91,6 +91,7 @@ class SyncService {
         selfie_url: selfieUrl,
         is_overtime: entry.is_overtime,
         overtime_type: entry.overtime_type,
+        notes: entry.notes || null,
       })
       .select()
       .single();
@@ -126,12 +127,18 @@ class SyncService {
     const clockOut = new Date(entry.clock_out!);
     const totalHours = Math.max(0, (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60));
 
+    const updateData: any = {
+      clock_out: entry.clock_out,
+      total_hours: totalHours,
+    };
+
+    if (entry.notes) {
+      updateData.notes = lastEntry.notes ? `${lastEntry.notes}\n[SAÍDA] ${entry.notes}` : `[SAÍDA] ${entry.notes}`;
+    }
+
     const { error: updateError } = await supabase
       .from('time_entries')
-      .update({
-        clock_out: entry.clock_out,
-        total_hours: totalHours,
-      })
+      .update(updateData)
       .eq('id', lastEntry.id);
 
     if (updateError) {
