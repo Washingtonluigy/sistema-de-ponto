@@ -302,9 +302,10 @@ export default function ClockIn() {
       const constraints = {
         video: {
           facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 640 },
+          height: { ideal: 480 }
         },
+        audio: false
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -412,24 +413,28 @@ export default function ClockIn() {
         return;
       }
 
+      console.log('[GEO] Solicitando localização...');
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log('[GEO] Localização obtida com sucesso');
           resolve({
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           });
         },
         (error) => {
+          console.error('[GEO] Erro:', error.code, error.message);
           let errorMsg = 'Erro ao obter localização: ';
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMsg += 'Permissão negada. Clique no ícone ao lado da URL e permita a localização.';
+              errorMsg += 'Permissão negada. Ative a localização nas configurações do seu navegador/dispositivo.';
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMsg += 'Localização indisponível. Tente novamente.';
+              errorMsg += 'Localização indisponível. Verifique se o GPS está ativado.';
               break;
             case error.TIMEOUT:
-              errorMsg += 'Tempo esgotado. Tente novamente.';
+              errorMsg += 'Tempo esgotado. Verifique sua conexão GPS e tente novamente.';
               break;
             default:
               errorMsg += error.message || 'Erro desconhecido';
@@ -438,8 +443,8 @@ export default function ClockIn() {
         },
         {
           enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 30000
+          timeout: 20000,
+          maximumAge: 60000
         }
       );
     });

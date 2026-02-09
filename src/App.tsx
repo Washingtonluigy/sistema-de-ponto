@@ -1,11 +1,69 @@
+import { Component, ReactNode } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import AdminLayout from './components/admin/AdminLayout';
 import EmployeeLayout from './components/employee/EmployeeLayout';
 import InstallPrompt from './components/InstallPrompt';
 
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    console.error('[ErrorBoundary] Erro capturado:', error);
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('[ErrorBoundary] Detalhes do erro:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              Ops! Algo deu errado
+            </h1>
+            <p className="text-gray-600 mb-6">
+              O aplicativo encontrou um erro. Tente recarregar a página.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition shadow-lg"
+            >
+              Recarregar Página
+            </button>
+            {this.state.error && (
+              <details className="mt-4 text-left">
+                <summary className="text-sm text-gray-500 cursor-pointer">
+                  Detalhes técnicos
+                </summary>
+                <pre className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto">
+                  {this.state.error.toString()}
+                </pre>
+              </details>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function AppContent() {
   const { user, profile, loading } = useAuth();
+
+  console.log('[APP] Estado:', { hasUser: !!user, hasProfile: !!profile, loading });
 
   if (loading) {
     return (
@@ -19,22 +77,27 @@ function AppContent() {
   }
 
   if (!user || !profile) {
+    console.log('[APP] Mostrando tela de login');
     return <Login />;
   }
 
   if (profile.role === 'admin') {
+    console.log('[APP] Mostrando layout admin');
     return <AdminLayout />;
   }
 
+  console.log('[APP] Mostrando layout colaborador');
   return <EmployeeLayout />;
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-      <InstallPrompt />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+        <InstallPrompt />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

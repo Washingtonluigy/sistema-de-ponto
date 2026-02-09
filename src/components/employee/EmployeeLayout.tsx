@@ -10,35 +10,9 @@ type MenuItem = 'clockin' | 'stats';
 export default function EmployeeLayout() {
   const [activeMenu, setActiveMenu] = useState<MenuItem>('clockin');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [permissionsGranted, setPermissionsGranted] = useState(false);
   const { signOut, profile } = useAuth();
 
-  useEffect(() => {
-    requestPermissions();
-  }, []);
-
-  const requestPermissions = async () => {
-    try {
-      await navigator.mediaDevices.getUserMedia({ video: true });
-
-      navigator.geolocation.getCurrentPosition(
-        () => {
-          setPermissionsGranted(true);
-        },
-        (error) => {
-          console.error('Erro localização:', error);
-          setPermissionsGranted(true);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 30000
-        }
-      );
-    } catch (error: any) {
-      console.error('Erro câmera:', error);
-    }
-  };
+  console.log('[EMPLOYEE LAYOUT] Renderizando layout do colaborador');
 
   const menuItems = [
     { id: 'clockin' as MenuItem, label: 'Bater Ponto', icon: Clock },
