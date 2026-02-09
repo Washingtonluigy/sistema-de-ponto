@@ -3,6 +3,7 @@ import { Clock, Plus, Minus, DollarSign, History, AlertCircle } from 'lucide-rea
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import Modal from '../Modal';
+import SuccessToast from '../SuccessToast';
 
 type Employee = {
   id: string;
@@ -84,6 +85,9 @@ export default function OvertimeManagement() {
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
   const [bankHistory, setBankHistory] = useState<BankAdjustmentHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     loadEmployees();
@@ -295,7 +299,8 @@ export default function OvertimeManagement() {
 
       closeModal();
       await loadEmployees();
-      alert('Ajuste registrado com sucesso!');
+      setSuccessMessage('Ajuste registrado com sucesso!');
+      setShowSuccessToast(true);
     } catch (error) {
       console.error('Erro ao adicionar ajuste:', error);
       alert('Erro ao adicionar ajuste');
@@ -322,7 +327,8 @@ export default function OvertimeManagement() {
 
       closeModal();
       await loadEmployees();
-      alert('Pagamento registrado com sucesso!');
+      setSuccessMessage('Pagamento registrado com sucesso!');
+      setShowSuccessToast(true);
     } catch (error) {
       console.error('Erro ao registrar pagamento:', error);
       alert('Erro ao registrar pagamento');
@@ -353,7 +359,8 @@ export default function OvertimeManagement() {
 
       closeModal();
       await loadEmployees();
-      alert('Ajuste de banco de horas registrado com sucesso!');
+      setSuccessMessage('Ajuste de banco de horas registrado com sucesso!');
+      setShowSuccessToast(true);
     } catch (error) {
       console.error('Erro ao ajustar banco de horas:', error);
       alert('Erro ao ajustar banco de horas');
@@ -843,6 +850,12 @@ export default function OvertimeManagement() {
           </div>
         </Modal>
       )}
+
+      <SuccessToast
+        isOpen={showSuccessToast}
+        onClose={() => setShowSuccessToast(false)}
+        message={successMessage}
+      />
     </div>
   );
 }
