@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Plus, Minus, DollarSign, Calendar, History, AlertCircle } from 'lucide-react';
+import { Clock, Plus, Minus, DollarSign, History, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import Modal from '../Modal';
@@ -18,6 +18,8 @@ type AdjustmentHistory = {
   id: string;
   hours: number;
   reason: string;
+  month: number;
+  year: number;
   created_at: string;
   admin_name: string;
 };
@@ -26,6 +28,8 @@ type PaymentHistory = {
   id: string;
   hours_paid: number;
   payment_date: string;
+  month: number;
+  year: number;
   notes: string;
   created_at: string;
   admin_name: string;
@@ -36,9 +40,16 @@ type BankAdjustmentHistory = {
   hours_deducted: number;
   adjustment_type: string;
   reason: string;
+  month: number;
+  year: number;
   created_at: string;
   admin_name: string;
 };
+
+const MONTHS = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
 
 export default function OvertimeManagement() {
   const { profile } = useAuth();
@@ -48,14 +59,26 @@ export default function OvertimeManagement() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'adjustment' | 'payment' | 'bank' | 'history'>('adjustment');
 
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
   const [adjustmentHours, setAdjustmentHours] = useState('');
   const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [adjustmentMonth, setAdjustmentMonth] = useState(now.getMonth() + 1);
+  const [adjustmentYear, setAdjustmentYear] = useState(now.getFullYear());
+
   const [paymentHours, setPaymentHours] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(now.toISOString().split('T')[0]);
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [paymentMonth, setPaymentMonth] = useState(now.getMonth() + 1);
+  const [paymentYear, setPaymentYear] = useState(now.getFullYear());
+
   const [bankHours, setBankHours] = useState('');
   const [bankType, setBankType] = useState<'hours' | 'days'>('hours');
   const [bankReason, setBankReason] = useState('');
+  const [bankMonth, setBankMonth] = useState(now.getMonth() + 1);
+  const [bankYear, setBankYear] = useState(now.getFullYear());
 
   const [adjustmentHistory, setAdjustmentHistory] = useState<AdjustmentHistory[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
@@ -64,7 +87,7 @@ export default function OvertimeManagement() {
 
   useEffect(() => {
     loadEmployees();
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   const loadEmployees = async () => {
     try {
@@ -80,7 +103,7 @@ export default function OvertimeManagement() {
 
       const employeeData = await Promise.all(
         (profiles || []).map(async (p) => {
-          const stats = await calculateEmployeeStats(p.id);
+          const stats = await calculateEmployeeStats(p.id, selectedMonth, selectedYear);
           return {
             id: p.id,
             full_name: p.full_name,
@@ -97,31 +120,38 @@ export default function OvertimeManagement() {
     }
   };
 
-  const calculateEmployeeStats = async (userId: string) => {
+  const calculateEmployeeStats = async (userId: string, month: number, year: number) => {
     try {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
 
       const { data: entries } = await supabase
         .from('time_entries')
         .select('worked_hours, overtime_hours, overtime_added_to_bank')
         .eq('user_id', userId)
-        .gte('clock_in', thirtyDaysAgo.toISOString());
+        .gte('clock_in', startDate.toISOString())
+        .lte('clock_in', endDate.toISOString());
 
       const { data: adjustments } = await supabase
         .from('overtime_adjustments')
         .select('hours')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('month', month)
+        .eq('year', year);
 
       const { data: payments } = await supabase
         .from('overtime_payments')
         .select('hours_paid')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('month', month)
+        .eq('year', year);
 
       const { data: bankAdjustments } = await supabase
         .from('hour_bank_adjustments')
         .select('hours_deducted')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('month', month)
+        .eq('year', year);
 
       const baseOvertime = entries?.reduce((sum, e) => {
         return sum + (e.overtime_added_to_bank ? 0 : e.overtime_hours || 0);
@@ -165,6 +195,17 @@ export default function OvertimeManagement() {
     }
   };
 
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedEmployee(null);
+    setAdjustmentHours('');
+    setAdjustmentReason('');
+    setPaymentHours('');
+    setPaymentNotes('');
+    setBankHours('');
+    setBankReason('');
+  };
+
   const loadHistory = async (userId: string) => {
     try {
       setHistoryLoading(true);
@@ -175,6 +216,8 @@ export default function OvertimeManagement() {
           id,
           hours,
           reason,
+          month,
+          year,
           created_at,
           admin:admin_id(full_name)
         `)
@@ -187,6 +230,8 @@ export default function OvertimeManagement() {
           id,
           hours_paid,
           payment_date,
+          month,
+          year,
           notes,
           created_at,
           admin:admin_id(full_name)
@@ -201,6 +246,8 @@ export default function OvertimeManagement() {
           hours_deducted,
           adjustment_type,
           reason,
+          month,
+          year,
           created_at,
           admin:admin_id(full_name)
         `)
@@ -209,17 +256,17 @@ export default function OvertimeManagement() {
 
       setAdjustmentHistory(adjData?.map(a => ({
         ...a,
-        admin_name: a.admin?.full_name || 'Admin'
+        admin_name: (a.admin as any)?.full_name || 'Admin'
       })) || []);
 
       setPaymentHistory(payData?.map(p => ({
         ...p,
-        admin_name: p.admin?.full_name || 'Admin'
+        admin_name: (p.admin as any)?.full_name || 'Admin'
       })) || []);
 
       setBankHistory(bankData?.map(b => ({
         ...b,
-        admin_name: b.admin?.full_name || 'Admin'
+        admin_name: (b.admin as any)?.full_name || 'Admin'
       })) || []);
 
     } catch (error) {
@@ -239,15 +286,16 @@ export default function OvertimeManagement() {
           user_id: selectedEmployee.id,
           admin_id: profile?.id,
           hours: parseFloat(adjustmentHours),
-          reason: adjustmentReason
+          reason: adjustmentReason,
+          month: adjustmentMonth,
+          year: adjustmentYear
         });
 
       if (error) throw error;
 
-      setShowModal(false);
-      setAdjustmentHours('');
-      setAdjustmentReason('');
+      closeModal();
       await loadEmployees();
+      alert('Ajuste registrado com sucesso!');
     } catch (error) {
       console.error('Erro ao adicionar ajuste:', error);
       alert('Erro ao adicionar ajuste');
@@ -265,15 +313,16 @@ export default function OvertimeManagement() {
           admin_id: profile?.id,
           hours_paid: parseFloat(paymentHours),
           payment_date: paymentDate,
-          notes: paymentNotes
+          notes: paymentNotes,
+          month: paymentMonth,
+          year: paymentYear
         });
 
       if (error) throw error;
 
-      setShowModal(false);
-      setPaymentHours('');
-      setPaymentNotes('');
+      closeModal();
       await loadEmployees();
+      alert('Pagamento registrado com sucesso!');
     } catch (error) {
       console.error('Erro ao registrar pagamento:', error);
       alert('Erro ao registrar pagamento');
@@ -295,15 +344,16 @@ export default function OvertimeManagement() {
           admin_id: profile?.id,
           adjustment_type: bankType,
           hours_deducted: hoursToDeduct,
-          reason: bankReason
+          reason: bankReason,
+          month: bankMonth,
+          year: bankYear
         });
 
       if (error) throw error;
 
-      setShowModal(false);
-      setBankHours('');
-      setBankReason('');
+      closeModal();
       await loadEmployees();
+      alert('Ajuste de banco de horas registrado com sucesso!');
     } catch (error) {
       console.error('Erro ao ajustar banco de horas:', error);
       alert('Erro ao ajustar banco de horas');
@@ -328,9 +378,31 @@ export default function OvertimeManagement() {
           <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl text-white">
             <Clock className="w-6 h-6" />
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900">Gerenciar Horas Extras</h2>
             <p className="text-sm text-gray-600">Ajustes manuais e pagamentos</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            >
+              {MONTHS.map((month, index) => (
+                <option key={index + 1} value={index + 1}>
+                  {month}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            >
+              {[2024, 2025, 2026, 2027].map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -424,7 +496,7 @@ export default function OvertimeManagement() {
       </div>
 
       {showModal && selectedEmployee && (
-        <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
+        <Modal isOpen={showModal} onClose={closeModal}>
           <div className="p-6">
             {modalType === 'adjustment' && (
               <>
@@ -432,6 +504,38 @@ export default function OvertimeManagement() {
                   Ajustar Horas Extras - {selectedEmployee.full_name}
                 </h3>
                 <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mês
+                      </label>
+                      <select
+                        value={adjustmentMonth}
+                        onChange={(e) => setAdjustmentMonth(parseInt(e.target.value))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      >
+                        {MONTHS.map((month, index) => (
+                          <option key={index + 1} value={index + 1}>
+                            {month}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ano
+                      </label>
+                      <select
+                        value={adjustmentYear}
+                        onChange={(e) => setAdjustmentYear(parseInt(e.target.value))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      >
+                        {[2024, 2025, 2026, 2027].map(year => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Horas (positivo adiciona, negativo remove)
@@ -474,6 +578,38 @@ export default function OvertimeManagement() {
                   Registrar Pagamento - {selectedEmployee.full_name}
                 </h3>
                 <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mês
+                      </label>
+                      <select
+                        value={paymentMonth}
+                        onChange={(e) => setPaymentMonth(parseInt(e.target.value))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      >
+                        {MONTHS.map((month, index) => (
+                          <option key={index + 1} value={index + 1}>
+                            {month}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ano
+                      </label>
+                      <select
+                        value={paymentYear}
+                        onChange={(e) => setPaymentYear(parseInt(e.target.value))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      >
+                        {[2024, 2025, 2026, 2027].map(year => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Horas Pagas
@@ -528,6 +664,38 @@ export default function OvertimeManagement() {
                   Ajustar Banco de Horas - {selectedEmployee.full_name}
                 </h3>
                 <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mês
+                      </label>
+                      <select
+                        value={bankMonth}
+                        onChange={(e) => setBankMonth(parseInt(e.target.value))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        {MONTHS.map((month, index) => (
+                          <option key={index + 1} value={index + 1}>
+                            {month}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ano
+                      </label>
+                      <select
+                        value={bankYear}
+                        onChange={(e) => setBankYear(parseInt(e.target.value))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        {[2024, 2025, 2026, 2027].map(year => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Tipo de Ajuste
@@ -606,11 +774,13 @@ export default function OvertimeManagement() {
                                   {adj.hours > 0 ? '+' : ''}{adj.hours}h
                                 </span>
                                 <span className="text-xs text-gray-500">
-                                  {new Date(adj.created_at).toLocaleString('pt-BR')}
+                                  {MONTHS[adj.month - 1]}/{adj.year}
                                 </span>
                               </div>
                               <p className="text-sm text-gray-700">{adj.reason}</p>
-                              <p className="text-xs text-gray-500 mt-1">Por: {adj.admin_name}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Por: {adj.admin_name} em {new Date(adj.created_at).toLocaleString('pt-BR')}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -626,11 +796,13 @@ export default function OvertimeManagement() {
                               <div className="flex justify-between items-start mb-1">
                                 <span className="font-semibold text-green-700">{pay.hours_paid}h pagas</span>
                                 <span className="text-xs text-gray-500">
-                                  {new Date(pay.payment_date).toLocaleDateString('pt-BR')}
+                                  {MONTHS[pay.month - 1]}/{pay.year}
                                 </span>
                               </div>
                               {pay.notes && <p className="text-sm text-gray-700">{pay.notes}</p>}
-                              <p className="text-xs text-gray-500 mt-1">Por: {pay.admin_name}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Por: {pay.admin_name} em {new Date(pay.payment_date).toLocaleDateString('pt-BR')}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -648,11 +820,13 @@ export default function OvertimeManagement() {
                                   -{bank.hours_deducted}h ({bank.adjustment_type === 'days' ? `${bank.hours_deducted / 8} dias` : 'horas'})
                                 </span>
                                 <span className="text-xs text-gray-500">
-                                  {new Date(bank.created_at).toLocaleString('pt-BR')}
+                                  {MONTHS[bank.month - 1]}/{bank.year}
                                 </span>
                               </div>
                               <p className="text-sm text-gray-700">{bank.reason}</p>
-                              <p className="text-xs text-gray-500 mt-1">Por: {bank.admin_name}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Por: {bank.admin_name} em {new Date(bank.created_at).toLocaleString('pt-BR')}
+                              </p>
                             </div>
                           ))}
                         </div>
