@@ -202,28 +202,87 @@ export default function ClockIn() {
     setCameraError(null);
     setShowCamera(true);
 
+    console.log('[CAMERA] Iniciando acesso à câmera...');
+    console.log('[CAMERA] Online:', isOnline);
+    console.log('[CAMERA] Contexto seguro (HTTPS):', window.isSecureContext);
+    console.log('[CAMERA] Navigator.mediaDevices disponível:', !!navigator.mediaDevices);
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const errorMsg = 'Câmera não disponível. Certifique-se de que o app está instalado e você está usando HTTPS.';
+      console.error('[CAMERA]', errorMsg);
+      setCameraError(errorMsg);
+      setShowCamera(false);
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      const errorMsg = 'Câmera requer contexto seguro (HTTPS). Acesse o app via HTTPS ou instale como PWA.';
+      console.error('[CAMERA]', errorMsg);
+      setCameraError(errorMsg);
+      setShowCamera(false);
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      console.log('[CAMERA] Solicitando permissão...');
+
+      const constraints = {
         video: {
           facingMode: 'user',
           width: { ideal: 1280 },
           height: { ideal: 720 }
         },
-      });
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      console.log('[CAMERA] Permissão concedida, stream obtido:', stream.id);
       streamRef.current = stream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        console.log('[CAMERA] Stream conectado ao elemento de vídeo');
       }
     } catch (error: any) {
+      console.error('[CAMERA] Erro ao acessar câmera:', error.name, error.message);
+
       let errorMsg = 'Erro ao acessar câmera. ';
+
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        errorMsg += 'Você precisa permitir o acesso à câmera. Clique no ícone de cadeado na barra de endereço e permita a câmera.';
-      } else if (error.name === 'NotFoundError') {
+        errorMsg += 'Permissão negada. ';
+        if (/android/i.test(navigator.userAgent)) {
+          errorMsg += 'No Android: vá em Configurações > Apps > ' + (document.title || 'Este App') + ' > Permissões e ative a Câmera.';
+        } else {
+          errorMsg += 'Clique no ícone de cadeado na barra de endereço e permita o acesso à câmera.';
+        }
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
         errorMsg += 'Nenhuma câmera foi encontrada no dispositivo.';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        errorMsg += 'A câmera está sendo usada por outro app. Feche outros apps que possam estar usando a câmera e tente novamente.';
+      } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+        errorMsg += 'A câmera do seu dispositivo não suporta as configurações solicitadas. Tentando com configurações mais simples...';
+
+        try {
+          console.log('[CAMERA] Tentando com configurações simplificadas...');
+          const simpleStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          streamRef.current = simpleStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = simpleStream;
+            console.log('[CAMERA] Sucesso com configurações simplificadas');
+          }
+          return;
+        } catch (retryError: any) {
+          console.error('[CAMERA] Falha na segunda tentativa:', retryError);
+          errorMsg = 'Não foi possível acessar a câmera mesmo com configurações simplificadas.';
+        }
+      } else if (error.name === 'SecurityError') {
+        errorMsg += 'Erro de segurança. Certifique-se de estar acessando via HTTPS ou usando o app instalado.';
       } else {
-        errorMsg += error.message || 'Verifique as permissões.';
+        errorMsg += error.message || 'Verifique as permissões e tente novamente.';
       }
+
       setCameraError(errorMsg);
+      setShowCamera(false);
     }
   };
 
