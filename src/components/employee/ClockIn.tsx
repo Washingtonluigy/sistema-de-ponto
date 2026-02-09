@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Clock, Camera, MapPin, CheckCircle, WifiOff, Wifi } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -22,96 +22,157 @@ export default function ClockIn() {
   const [showEpiModal, setShowEpiModal] = useState(false);
   const [isOvertimeSession, setIsOvertimeSession] = useState(false);
   const [pendingSync, setPendingSync] = useState(0);
+  const [isCheckingSession, setIsCheckingSession] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const checkSessionTimeoutRef = useRef<number | null>(null);
+
+  const checkPendingSync = useCallback(async () => {
+    try {
+      const pending = await offlineStorage.getPendingEntries();
+      setPendingSync(pending.length);
+    } catch (error) {
+      console.error('[SYNC] Erro ao verificar pendências:', error);
+    }
+  }, []);
+
+  const checkActiveSession = useCallback(async () => {
+    if (!user) return;
+
+    if (isCheckingSession) {
+      console.log('[SESSION] Verificação já em andamento, ignorando...');
+      return;
+    }
+
+    if (checkSessionTimeoutRef.current) {
+      clearTimeout(checkSessionTimeoutRef.current);
+    }
+
+    checkSessionTimeoutRef.current = window.setTimeout(async () => {
+      setIsCheckingSession(true);
+
+      try {
+        console.log('[SESSION] Verificando sessão ativa...');
+
+        const { data, error } = await supabase
+          .from('active_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('[SESSION] Erro ao buscar sessão:', error);
+          setIsCheckingSession(false);
+          return;
+        }
+
+        if (data) {
+          console.log('[SESSION] Sessão ativa encontrada:', data.clock_in_time);
+
+          const { data: currentEntry, error: entryError } = await supabase
+            .from('time_entries')
+            .select('is_overtime')
+            .eq('user_id', user.id)
+            .is('clock_out', null)
+            .order('clock_in', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (entryError) {
+            console.error('[SESSION] Erro ao buscar entrada:', entryError);
+            setIsCheckingSession(false);
+            return;
+          }
+
+          if (!currentEntry) {
+            console.warn('[SESSION] Sessão órfã detectada - limpando...');
+            await supabase.from('active_sessions').delete().eq('user_id', user.id);
+            setActiveSession(null);
+            setIsOvertimeSession(false);
+          } else {
+            setActiveSession(data);
+            setIsOvertimeSession(currentEntry.is_overtime || false);
+          }
+        } else {
+          console.log('[SESSION] Nenhuma sessão ativa');
+          setActiveSession(null);
+          setIsOvertimeSession(false);
+        }
+      } catch (error) {
+        console.error('[SESSION] Erro inesperado:', error);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    }, 300);
+  }, [user, isCheckingSession]);
 
   useEffect(() => {
+    if (!user) return;
+
+    console.log('[MOUNT] Componente montado, iniciando verificações...');
     checkActiveSession();
     checkPendingSync();
     syncService.startAutoSync();
+
     return () => {
+      console.log('[UNMOUNT] Limpando recursos...');
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (checkSessionTimeoutRef.current) {
+        clearTimeout(checkSessionTimeoutRef.current);
       }
     };
   }, [user]);
 
   useEffect(() => {
     if (isOnline) {
+      console.log('[ONLINE] Voltou online, sincronizando...');
       syncService.syncPendingEntries().then(() => {
         checkPendingSync();
+        checkActiveSession();
       });
     }
-  }, [isOnline]);
-
-  const checkPendingSync = async () => {
-    const pending = await offlineStorage.getPendingEntries();
-    setPendingSync(pending.length);
-  };
+  }, [isOnline, checkPendingSync, checkActiveSession]);
 
   useEffect(() => {
-    if (!activeSession) return;
+    if (!activeSession || !profile) return;
 
+    console.log('[AUTO-CLOCKOUT] Iniciando monitoramento...');
     const interval = setInterval(() => {
       checkAutoClockOut();
     }, 30000);
 
-    return () => clearInterval(interval);
+    return () => {
+      console.log('[AUTO-CLOCKOUT] Parando monitoramento...');
+      clearInterval(interval);
+    };
   }, [activeSession, profile]);
 
-  const checkActiveSession = async () => {
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('active_sessions')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (data) {
-      const { data: currentEntry } = await supabase
-        .from('time_entries')
-        .select('is_overtime')
-        .eq('user_id', user.id)
-        .is('clock_out', null)
-        .order('clock_in', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!currentEntry) {
-        console.warn('Sessão ativa encontrada mas sem entrada no banco - limpando sessão órfã');
-        await supabase.from('active_sessions').delete().eq('user_id', user.id);
-        setActiveSession(null);
-        return;
-      }
-
-      setActiveSession(data);
-      setIsOvertimeSession(currentEntry.is_overtime || false);
-    } else {
-      setActiveSession(null);
-    }
-  };
-
-  const handleResetSession = async () => {
-    if (!user) return;
+  const handleResetSession = useCallback(async () => {
+    if (!user || loading) return;
 
     try {
+      console.log('[RESET] Resetando sessão...');
       setLoading(true);
       await supabase.from('active_sessions').delete().eq('user_id', user.id);
       await offlineStorage.clearAll();
       setActiveSession(null);
       setCapturedImage(null);
+      closeCamera();
       setModalTitle('Sessão Resetada');
       setModalMessage('Sua sessão foi resetada com sucesso. Agora você pode bater ponto normalmente.');
       setModalOpen(true);
+      console.log('[RESET] Sessão resetada com sucesso');
     } catch (error: any) {
+      console.error('[RESET] Erro ao resetar:', error);
       setModalTitle('Erro');
       setModalMessage('Erro ao resetar sessão: ' + error.message);
       setModalOpen(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, loading, closeCamera]);
 
   const getCurrentTimeInMinutes = () => {
     const now = new Date();
@@ -198,7 +259,17 @@ export default function ClockIn() {
     return { isOvertime: isLunchPeriod || isAfterHours, type: isLunchPeriod ? 'lunch' : 'after_hours' };
   };
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
+    if (showCamera || streamRef.current) {
+      console.log('[CAMERA] Câmera já está aberta ou em uso, ignorando...');
+      return;
+    }
+
+    if (loading) {
+      console.log('[CAMERA] Operação em andamento, aguarde...');
+      return;
+    }
+
     setCameraError(null);
     setShowCamera(true);
 
@@ -211,7 +282,7 @@ export default function ClockIn() {
       const errorMsg = 'Câmera não disponível. Certifique-se de que o app está instalado e você está usando HTTPS.';
       console.error('[CAMERA]', errorMsg);
       setCameraError(errorMsg);
-      setShowCamera(false);
+      closeCamera();
       return;
     }
 
@@ -219,7 +290,7 @@ export default function ClockIn() {
       const errorMsg = 'Câmera requer contexto seguro (HTTPS). Acesse o app via HTTPS ou instale como PWA.';
       console.error('[CAMERA]', errorMsg);
       setCameraError(errorMsg);
-      setShowCamera(false);
+      closeCamera();
       return;
     }
 
@@ -282,27 +353,55 @@ export default function ClockIn() {
       }
 
       setCameraError(errorMsg);
-      setShowCamera(false);
+      closeCamera();
     }
-  };
+  }, [showCamera, loading, isOnline, closeCamera]);
 
-  const capturePhoto = () => {
-    if (!videoRef.current) return;
+  const closeCamera = useCallback(() => {
+    console.log('[CAMERA] Fechando câmera...');
+    setShowCamera(false);
+    setCameraError(null);
 
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        console.log('[CAMERA] Track parado:', track.kind);
+      });
+      streamRef.current = null;
+    }
+  }, []);
+
+  const retakePhoto = useCallback(() => {
+    console.log('[CAMERA] Tirando nova foto...');
+    setCapturedImage(null);
+    closeCamera();
+  }, [closeCamera]);
+
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current) {
+      console.log('[CAMERA] Elemento de vídeo não disponível');
+      return;
+    }
+
+    if (capturedImage) {
+      console.log('[CAMERA] Foto já capturada, ignorando...');
+      return;
+    }
+
+    console.log('[CAMERA] Capturando foto...');
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     const ctx = canvas.getContext('2d');
+
     if (ctx) {
       ctx.drawImage(videoRef.current, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg');
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
       setCapturedImage(imageData);
-      setShowCamera(false);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      closeCamera();
+      console.log('[CAMERA] Foto capturada com sucesso');
     }
-  };
+  }, [capturedImage, closeCamera]);
 
   const getLocation = (): Promise<{ lat: number; lng: number }> => {
     return new Promise((resolve, reject) => {
@@ -607,13 +706,7 @@ export default function ClockIn() {
                 </button>
               )}
               <button
-                onClick={() => {
-                  setShowCamera(false);
-                  setCameraError(null);
-                  if (streamRef.current) {
-                    streamRef.current.getTracks().forEach((track) => track.stop());
-                  }
-                }}
+                onClick={closeCamera}
                 className="px-6 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition"
               >
                 {cameraError ? 'Voltar' : 'Cancelar'}
@@ -721,7 +814,7 @@ export default function ClockIn() {
                   <span>{loading ? 'Registrando...' : 'Registrar Entrada'}</span>
                 </button>
                 <button
-                  onClick={() => setCapturedImage(null)}
+                  onClick={retakePhoto}
                   className="w-full bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition"
                 >
                   Tirar Outra Foto
