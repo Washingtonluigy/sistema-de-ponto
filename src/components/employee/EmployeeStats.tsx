@@ -22,22 +22,45 @@ export default function EmployeeStats() {
     if (!user) return;
 
     try {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const { data } = await supabase
-        .from('overtime_hours')
-        .select('*')
+      const { data: entries } = await supabase
+        .from('time_entries')
+        .select('worked_hours, overtime_hours, overtime_added_to_bank')
         .eq('user_id', user.id)
-        .eq('month', month)
-        .eq('year', year)
-        .maybeSingle();
+        .gte('clock_in', thirtyDaysAgo.toISOString());
 
-      if (data) {
-        setOvertime(data.overtime_hours || 0);
-        setHourBank(data.hour_bank || 0);
-      }
+      const { data: adjustments } = await supabase
+        .from('overtime_adjustments')
+        .select('hours')
+        .eq('user_id', user.id);
+
+      const { data: payments } = await supabase
+        .from('overtime_payments')
+        .select('hours_paid')
+        .eq('user_id', user.id);
+
+      const { data: bankAdjustments } = await supabase
+        .from('hour_bank_adjustments')
+        .select('hours_deducted')
+        .eq('user_id', user.id);
+
+      const baseOvertime = entries?.reduce((sum, e) => {
+        return sum + (e.overtime_added_to_bank ? 0 : e.overtime_hours || 0);
+      }, 0) || 0;
+
+      const totalAdjustments = adjustments?.reduce((sum, a) => sum + a.hours, 0) || 0;
+      const totalPayments = payments?.reduce((sum, p) => sum + p.hours_paid, 0) || 0;
+
+      const baseBankHours = entries?.reduce((sum, e) => {
+        return sum + (e.overtime_added_to_bank ? e.overtime_hours || 0 : 0);
+      }, 0) || 0;
+
+      const totalBankAdjustments = bankAdjustments?.reduce((sum, a) => sum + a.hours_deducted, 0) || 0;
+
+      setOvertime(baseOvertime + totalAdjustments - totalPayments);
+      setHourBank(baseBankHours - totalBankAdjustments);
     } catch (error) {
       console.error('Error loading stats:', error);
     } finally {
