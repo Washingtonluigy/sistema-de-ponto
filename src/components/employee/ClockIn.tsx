@@ -23,6 +23,8 @@ export default function ClockIn() {
   const [isOvertimeSession, setIsOvertimeSession] = useState(false);
   const [pendingSync, setPendingSync] = useState(0);
   const [isCheckingSession, setIsCheckingSession] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [notes, setNotes] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const checkSessionTimeoutRef = useRef<number | null>(null);
@@ -443,7 +445,7 @@ export default function ClockIn() {
     });
   };
 
-  const handleClockIn = async () => {
+  const handleClockIn = async (observation?: string) => {
     if (!capturedImage) {
       alert('Por favor, tire uma selfie antes de bater o ponto');
       return;
@@ -461,6 +463,7 @@ export default function ClockIn() {
 
       const overtimeCheck = isOvertimePeriod();
       const clockInTime = new Date().toISOString();
+      const notesText = observation?.trim() || null;
 
       if (!isOnline) {
         const pendingEntry = {
@@ -472,6 +475,7 @@ export default function ClockIn() {
           selfie_url: capturedImage,
           is_overtime: overtimeCheck.isOvertime,
           overtime_type: overtimeCheck.isOvertime ? overtimeCheck.type : null,
+          notes: notesText,
           type: 'clock_in' as const,
           timestamp: Date.now(),
         };
@@ -479,6 +483,7 @@ export default function ClockIn() {
         await offlineStorage.addPendingEntry(pendingEntry);
         await checkPendingSync();
         setCapturedImage(null);
+        setNotes('');
 
         setActiveSession({
           user_id: user!.id,
@@ -505,6 +510,7 @@ export default function ClockIn() {
           selfie_url: capturedImage,
           is_overtime: overtimeCheck.isOvertime,
           overtime_type: overtimeCheck.isOvertime ? overtimeCheck.type : null,
+          notes: notesText,
         })
         .select()
         .single();
@@ -521,6 +527,7 @@ export default function ClockIn() {
 
       await checkActiveSession();
       setCapturedImage(null);
+      setNotes('');
 
       if (overtimeCheck.isOvertime) {
         setModalTitle('Ponto Batido - Hora Extra');
@@ -541,7 +548,7 @@ export default function ClockIn() {
     }
   };
 
-  const handleClockOut = async () => {
+  const handleClockOut = async (observation?: string) => {
     console.log('[CLOCK OUT] Iniciando registro de saída...');
     setLoading(true);
 
@@ -550,6 +557,7 @@ export default function ClockIn() {
       console.log('[CLOCK OUT] Online status:', isOnline);
 
       const clockOutTime = new Date().toISOString();
+      const notesText = observation?.trim() || null;
 
       if (!isOnline) {
         console.log('[CLOCK OUT] Modo offline detectado');
@@ -562,6 +570,7 @@ export default function ClockIn() {
           selfie_url: '',
           is_overtime: false,
           overtime_type: null,
+          notes: notesText,
           type: 'clock_out' as const,
           timestamp: Date.now(),
           total_hours: 0,
@@ -571,6 +580,7 @@ export default function ClockIn() {
         await checkPendingSync();
 
         setActiveSession(null);
+        setNotes('');
 
         setModalTitle('Saída Salva Offline');
         setModalMessage('Sua saída foi salva localmente e será enviada quando houver internet.');
@@ -609,18 +619,26 @@ export default function ClockIn() {
       console.log('[CLOCK OUT] Horas trabalhadas:', totalHours);
       console.log('[CLOCK OUT] Atualizando registro no banco...');
 
+      const updateData: any = {
+        clock_out: clockOut.toISOString(),
+        total_hours: totalHours,
+      };
+
+      if (notesText) {
+        updateData.notes = lastEntry.notes ? `${lastEntry.notes}\n[SAÍDA] ${notesText}` : `[SAÍDA] ${notesText}`;
+      }
+
       const { error: updateError } = await supabase
         .from('time_entries')
-        .update({
-          clock_out: clockOut.toISOString(),
-          total_hours: totalHours,
-        })
+        .update(updateData)
         .eq('id', lastEntry.id);
 
       if (updateError) {
         console.error('[CLOCK OUT] Erro ao atualizar registro de saída:', updateError);
         throw new Error('Erro ao registrar saída: ' + updateError.message);
       }
+
+      setNotes('');
 
       console.log('[CLOCK OUT] Registro atualizado com sucesso!');
 
@@ -806,7 +824,7 @@ export default function ClockIn() {
             ) : (
               <div className="space-y-3">
                 <button
-                  onClick={handleClockIn}
+                  onClick={() => setShowNotesModal(true)}
                   disabled={loading}
                   className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2"
                 >
@@ -846,7 +864,7 @@ export default function ClockIn() {
               </div>
             </div>
             <button
-              onClick={handleClockOut}
+              onClick={() => setShowNotesModal(true)}
               disabled={loading}
               className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-4 rounded-lg font-semibold hover:from-red-600 hover:to-red-700 transition shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2"
             >
@@ -885,6 +903,65 @@ export default function ClockIn() {
         title="Lembrete de Segurança"
         message="Verifique seus equipamentos de EPIs para sua segurança e a de seus colegas"
       />
+
+      {showNotesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-fadeIn">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 mb-4">
+                <Clock className="h-6 w-6 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Alguma observação sobre o horário do ponto?
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Campo opcional. Use para justificar atrasos ou esquecimentos.
+              </p>
+            </div>
+
+            <div>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Ex: Esqueci de bater o ponto na hora certa, reunião inesperada, etc..."
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition resize-none"
+                rows={4}
+                maxLength={500}
+              />
+              <div className="text-right text-xs text-gray-400 mt-1">
+                {notes.length}/500 caracteres
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowNotesModal(false);
+                  setNotes('');
+                }}
+                disabled={loading}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setShowNotesModal(false);
+                  if (activeSession) {
+                    handleClockOut(notes);
+                  } else {
+                    handleClockIn(notes);
+                  }
+                }}
+                disabled={loading}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition shadow-lg disabled:opacity-50"
+              >
+                {loading ? 'Registrando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ type TimeEntry = {
   clock_out: string | null;
   selfie_url: string | null;
   is_overtime: boolean;
+  notes: string | null;
 };
 
 type EmployeeWithPhotos = {
@@ -41,7 +42,7 @@ export default function PhotoRegistry() {
       for (const profile of profiles || []) {
         const { data: entries } = await supabase
           .from('time_entries')
-          .select('id, user_id, clock_in, clock_out, selfie_url, is_overtime')
+          .select('id, user_id, clock_in, clock_out, selfie_url, is_overtime, notes')
           .eq('user_id', profile.id)
           .not('selfie_url', 'is', null)
           .order('clock_in', { ascending: false })
@@ -154,6 +155,12 @@ export default function PhotoRegistry() {
                             <p className="text-xs text-gray-600 mt-1">
                               Saída: {formatDateTime(entry.clock_out)}
                             </p>
+                          )}
+                          {entry.notes && (
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                              <p className="text-xs font-semibold text-blue-600 mb-1">Observação:</p>
+                              <p className="text-xs text-gray-700 italic line-clamp-3">{entry.notes}</p>
+                            </div>
                           )}
                         </div>
                       </div>

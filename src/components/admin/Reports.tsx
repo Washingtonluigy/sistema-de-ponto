@@ -245,6 +245,7 @@ export default function Reports() {
               'Total Horas do Dia': Number(totalHoursDay.toFixed(2)),
               'Hora Extra?': (sunday || extraHoursDay > 0) ? 'Sim' : 'Não',
               'Horas Extras do Dia': Number(extraHoursDay.toFixed(2)),
+              'Observações': entry.notes || '-',
               'Tipo': cruzaDia ? 'Saída no dia seguinte' :
                       sunday ? 'Domingo (100%)' :
                       entry.overtime_type === 'after_hours' ? 'Após Expediente' :
@@ -269,10 +270,11 @@ export default function Reports() {
       { wch: 18 },
       { wch: 12 },
       { wch: 18 },
+      { wch: 50 },
       { wch: 20 },
     ];
 
-    wsDetalhamento['!autofilter'] = { ref: `A1:K${detalhamentoData.length + 1}` };
+    wsDetalhamento['!autofilter'] = { ref: `A1:L${detalhamentoData.length + 1}` };
 
     XLSX.utils.book_append_sheet(workbook, wsDetalhamento, 'Detalhamento Completo');
 
