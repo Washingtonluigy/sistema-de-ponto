@@ -20,56 +20,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log('[AUTH] Inicializando contexto de autenticação...');
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('[AUTH] Erro ao obter sessão:', error);
-        setLoading(false);
-        return;
-      }
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-      console.log('[AUTH] Sessão carregada:', session ? 'Usuário autenticado' : 'Sem usuário');
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
+        if (error) {
+          console.error('[AUTH] Erro ao obter sessão:', error);
+          setLoading(false);
+          return;
+        }
+
+        console.log('[AUTH] Sessão carregada:', session ? 'Usuário autenticado' : 'Sem usuário');
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[AUTH] Exceção ao obter sessão:', err);
         setLoading(false);
       }
-    }).catch((err) => {
-      console.error('[AUTH] Exceção ao obter sessão:', err);
-      setLoading(false);
-    });
+    };
+
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (() => {
-        console.log('[AUTH] Mudança de estado:', _event, session ? 'com usuário' : 'sem usuário');
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          loadProfile(session.user.id);
-        } else {
-          setProfile(null);
+      (async () => {
+        try {
+          console.log('[AUTH] Mudança de estado:', _event, session ? 'com usuário' : 'sem usuário');
+          setUser(session?.user ?? null);
+
+          if (session?.user) {
+            await loadProfile(session.user.id);
+          } else {
+            setProfile(null);
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error('[AUTH] Erro ao processar mudança de estado:', err);
           setLoading(false);
         }
       })();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      try {
+        subscription.unsubscribe();
+      } catch (err) {
+        console.error('[AUTH] Erro ao cancelar subscription:', err);
+      }
+    };
   }, []);
 
   const loadProfile = async (userId: string) => {
     console.log('[AUTH] Carregando perfil para usuário:', userId);
     try {
-      const cachedProfile = localStorage.getItem(`profile-${userId}`);
-      if (cachedProfile) {
-        console.log('[AUTH] Perfil em cache encontrado');
-        try {
-          setProfile(JSON.parse(cachedProfile));
+      // Tentar carregar cache primeiro (mas não falhar se não funcionar)
+      try {
+        const cachedProfile = localStorage.getItem(`profile-${userId}`);
+        if (cachedProfile) {
+          console.log('[AUTH] Perfil em cache encontrado');
+          const parsed = JSON.parse(cachedProfile);
+          setProfile(parsed);
           setLoading(false);
-        } catch (e) {
-          console.error('[AUTH] Erro ao parsear cache:', e);
-          localStorage.removeItem(`profile-${userId}`);
         }
+      } catch (e) {
+        console.warn('[AUTH] Erro ao acessar cache:', e);
+        // Continua mesmo se o cache falhar
       }
 
+      // Buscar do servidor
+      console.log('[AUTH] Buscando perfil do servidor...');
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -78,34 +101,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('[AUTH] Erro ao buscar perfil:', error);
-        throw error;
+        // Não lança erro, apenas loga
+        setLoading(false);
+        return;
       }
 
       if (data) {
         console.log('[AUTH] Perfil carregado do servidor:', data.role);
         setProfile(data);
+
+        // Tentar salvar no cache (mas não falhar se não funcionar)
         try {
           localStorage.setItem(`profile-${userId}`, JSON.stringify(data));
+          console.log('[AUTH] Perfil salvo no cache');
         } catch (e) {
-          console.warn('[AUTH] Erro ao salvar no localStorage:', e);
+          console.warn('[AUTH] Erro ao salvar cache (mas perfil foi carregado):', e);
         }
       } else {
         console.warn('[AUTH] Nenhum perfil encontrado para o usuário');
       }
     } catch (error) {
-      console.error('[AUTH] Erro ao carregar perfil:', error);
-      const cachedProfile = localStorage.getItem(`profile-${userId}`);
-      if (cachedProfile && !profile) {
-        try {
+      console.error('[AUTH] Erro crítico ao carregar perfil:', error);
+
+      // Tentar usar cache como última opção
+      try {
+        const cachedProfile = localStorage.getItem(`profile-${userId}`);
+        if (cachedProfile && !profile) {
           setProfile(JSON.parse(cachedProfile));
           console.log('[AUTH] Usando perfil do cache após erro');
-        } catch (e) {
-          console.error('[AUTH] Erro ao usar cache como fallback:', e);
         }
+      } catch (e) {
+        console.error('[AUTH] Erro ao usar cache como fallback:', e);
       }
     } finally {
       setLoading(false);
-      console.log('[AUTH] Carregamento de perfil finalizado');
+      console.log('[AUTH] Carregamento de perfil finalizado. Profile:', profile ? 'carregado' : 'null');
     }
   };
 

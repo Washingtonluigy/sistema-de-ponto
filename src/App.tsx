@@ -32,25 +32,32 @@ class ErrorBoundary extends Component<
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
               Ops! Algo deu errado
             </h1>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               O aplicativo encontrou um erro. Tente recarregar a página.
             </p>
+            {this.state.error && (
+              <div className="mb-6 text-left bg-red-50 p-4 rounded-lg">
+                <p className="text-xs font-mono text-red-800 break-words">
+                  {this.state.error.toString()}
+                </p>
+                {this.state.error.stack && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-red-600 cursor-pointer">
+                      Stack trace
+                    </summary>
+                    <pre className="mt-2 text-xs text-red-600 overflow-auto max-h-40">
+                      {this.state.error.stack}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
             <button
               onClick={() => window.location.reload()}
               className="w-full px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition shadow-lg"
             >
               Recarregar Página
             </button>
-            {this.state.error && (
-              <details className="mt-4 text-left">
-                <summary className="text-sm text-gray-500 cursor-pointer">
-                  Detalhes técnicos
-                </summary>
-                <pre className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto">
-                  {this.state.error.toString()}
-                </pre>
-              </details>
-            )}
           </div>
         </div>
       );

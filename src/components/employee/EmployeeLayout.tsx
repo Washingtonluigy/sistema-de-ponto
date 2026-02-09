@@ -9,19 +9,20 @@ type MenuItem = 'clockin' | 'stats';
 
 class ContentErrorBoundary extends Component<
   { children: ReactNode },
-  { hasError: boolean }
+  { hasError: boolean; error: Error | null }
 > {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error) {
+    console.error('[CONTENT ERROR] Erro capturado:', error);
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
-    console.error('[CONTENT ERROR]', error, errorInfo);
+    console.error('[CONTENT ERROR] Detalhes:', error, errorInfo);
   }
 
   render() {
@@ -31,6 +32,13 @@ class ContentErrorBoundary extends Component<
           <div className="text-4xl mb-4">⚠️</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Erro ao carregar</h2>
           <p className="text-gray-600 mb-4">Tente recarregar a página</p>
+          {this.state.error && (
+            <div className="mb-4 text-left bg-red-50 p-3 rounded-lg">
+              <p className="text-xs font-mono text-red-800 break-words">
+                {this.state.error.toString()}
+              </p>
+            </div>
+          )}
           <button
             onClick={() => window.location.reload()}
             className="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition"
