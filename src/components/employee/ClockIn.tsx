@@ -68,8 +68,6 @@ export default function ClockIn() {
       .eq('user_id', user.id)
       .maybeSingle();
 
-    setActiveSession(data);
-
     if (data) {
       const { data: currentEntry } = await supabase
         .from('time_entries')
@@ -80,7 +78,38 @@ export default function ClockIn() {
         .limit(1)
         .maybeSingle();
 
-      setIsOvertimeSession(currentEntry?.is_overtime || false);
+      if (!currentEntry) {
+        console.warn('Sessão ativa encontrada mas sem entrada no banco - limpando sessão órfã');
+        await supabase.from('active_sessions').delete().eq('user_id', user.id);
+        setActiveSession(null);
+        return;
+      }
+
+      setActiveSession(data);
+      setIsOvertimeSession(currentEntry.is_overtime || false);
+    } else {
+      setActiveSession(null);
+    }
+  };
+
+  const handleResetSession = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      await supabase.from('active_sessions').delete().eq('user_id', user.id);
+      await offlineStorage.clearAll();
+      setActiveSession(null);
+      setCapturedImage(null);
+      setModalTitle('Sessão Resetada');
+      setModalMessage('Sua sessão foi resetada com sucesso. Agora você pode bater ponto normalmente.');
+      setModalOpen(true);
+    } catch (error: any) {
+      setModalTitle('Erro');
+      setModalMessage('Erro ao resetar sessão: ' + error.message);
+      setModalOpen(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -671,6 +700,16 @@ export default function ClockIn() {
             >
               <MapPin className="w-5 h-5" />
               <span>{loading ? 'Registrando...' : 'Registrar Saída'}</span>
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('Tem certeza? Isso irá resetar sua sessão atual. Use apenas se estiver com problemas para bater ponto.')) {
+                  handleResetSession();
+                }
+              }}
+              className="w-full bg-gray-400 text-white py-2 rounded-lg text-sm hover:bg-gray-500 transition"
+            >
+              Resetar Sessão (usar apenas se travado)
             </button>
           </div>
         )}

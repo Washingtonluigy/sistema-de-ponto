@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera, Car, Fuel, BarChart3, MinusCircle } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera, Car, Fuel, BarChart3, MinusCircle, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminDashboard from './AdminDashboard';
 import EmployeeTracking from './EmployeeTracking';
@@ -10,8 +10,9 @@ import VehicleManagement from './VehicleManagement';
 import FuelManagement from './FuelManagement';
 import FuelReports from './FuelReports';
 import HourBankDeduction from './HourBankDeduction';
+import SessionManager from './SessionManager';
 
-type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos' | 'vehicles' | 'fuel' | 'fuel-reports' | 'hour-bank';
+type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos' | 'vehicles' | 'fuel' | 'fuel-reports' | 'hour-bank' | 'sessions';
 
 export default function AdminLayout() {
   const [activeMenu, setActiveMenu] = useState<MenuItem>('dashboard');
@@ -23,6 +24,7 @@ export default function AdminLayout() {
     { id: 'tracking' as MenuItem, label: 'Acompanhar Colaboradores', icon: MapPin },
     { id: 'registration' as MenuItem, label: 'Cadastrar Colaborador', icon: Users },
     { id: 'hour-bank' as MenuItem, label: 'Baixa de Banco de Horas', icon: MinusCircle },
+    { id: 'sessions' as MenuItem, label: 'Gerenciar Sessões', icon: Settings },
     { id: 'photos' as MenuItem, label: 'Registro', icon: Camera },
     { id: 'reports' as MenuItem, label: 'Relatórios', icon: FileText },
     { id: 'vehicles' as MenuItem, label: 'Veículos', icon: Car },
@@ -40,6 +42,8 @@ export default function AdminLayout() {
         return <EmployeeRegistration />;
       case 'hour-bank':
         return <HourBankDeduction />;
+      case 'sessions':
+        return <SessionManager />;
       case 'photos':
         return <PhotoRegistry />;
       case 'reports':

@@ -90,6 +90,8 @@ class OfflineStorage {
       request.onerror = () => reject(request.error);
     });
   }
+
+  clearAll = this.clearAllPendingEntries;
 }
 
 export const offlineStorage = new OfflineStorage();

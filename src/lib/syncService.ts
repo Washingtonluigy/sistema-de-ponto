@@ -117,6 +117,8 @@ class SyncService {
       .maybeSingle();
 
     if (!lastEntry) {
+      console.warn('[SYNC] Sem entrada em aberto para clock_out - limpando sessão ativa se existir');
+      await supabase.from('active_sessions').delete().eq('user_id', entry.user_id);
       throw new Error('No active entry found for clock out');
     }
 
@@ -124,13 +126,18 @@ class SyncService {
     const clockOut = new Date(entry.clock_out!);
     const totalHours = Math.max(0, (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60));
 
-    await supabase
+    const { error: updateError } = await supabase
       .from('time_entries')
       .update({
         clock_out: entry.clock_out,
         total_hours: totalHours,
       })
       .eq('id', lastEntry.id);
+
+    if (updateError) {
+      console.error('[SYNC] Erro ao atualizar saída:', updateError);
+      throw updateError;
+    }
 
     const now = new Date(entry.clock_out!);
     const month = now.getMonth() + 1;
@@ -140,7 +147,7 @@ class SyncService {
       .from('profiles')
       .select('work_hours, overtime_limit')
       .eq('id', entry.user_id)
-      .single();
+      .maybeSingle();
 
     const workHours = profile?.work_hours || 8;
     const overtimeLimit = profile?.overtime_limit || 30;
