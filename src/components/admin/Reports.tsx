@@ -58,6 +58,7 @@ export default function Reports() {
         const overtimeLimit = profile.overtime_limit || 30;
 
         const normalDays = new Map<string, number>();
+        const sundayDaysSet = new Set<string>();
         let sundayHoursTotal = 0;
         let totalHours = 0;
 
@@ -68,15 +69,14 @@ export default function Reports() {
 
           if (new Date(entry.clock_in).getDay() === 0) {
             sundayHoursTotal += hours;
+            sundayDaysSet.add(dateKey);
           } else {
             normalDays.set(dateKey, (normalDays.get(dateKey) || 0) + hours);
           }
         });
 
-        const normalHoursTotal = Array.from(normalDays.values()).reduce((sum, h) => sum + h, 0);
-        const expectedNormalHours = normalDays.size * workHours;
-        const normalOvertime = Math.max(0, normalHoursTotal - expectedNormalHours);
-        const totalExtraHours = normalOvertime + sundayHoursTotal;
+        const totalDiasAll = normalDays.size + sundayDaysSet.size;
+        const totalExtraHours = Math.max(0, totalHours - (totalDiasAll * workHours));
 
         return {
           profile,
@@ -113,6 +113,7 @@ export default function Reports() {
       const completedEntries = r.entries.filter(e => e.clock_out);
 
       const normalDays = new Map<string, number>();
+      const sundayDaysSet2 = new Set<string>();
       let sundayHoursTotal = 0;
       let totalHoursRecalc = 0;
 
@@ -123,6 +124,7 @@ export default function Reports() {
 
         if (isDomingo(entry.clock_in)) {
           sundayHoursTotal += hours;
+          sundayDaysSet2.add(dateKey);
         } else {
           normalDays.set(dateKey, (normalDays.get(dateKey) || 0) + hours);
         }
@@ -132,14 +134,10 @@ export default function Reports() {
       const normalHoursTotal = Array.from(normalDays.values()).reduce((sum, h) => sum + h, 0);
       const expectedNormalHours = normalDaysCount * workHours;
       const normalOvertime = Math.max(0, normalHoursTotal - expectedNormalHours);
-      const totalExtraHours = normalOvertime + sundayHoursTotal;
 
-      const sundayDays = new Set(
-        completedEntries
-          .filter(e => isDomingo(e.clock_in))
-          .map(e => new Date(e.clock_in).toLocaleDateString('pt-BR'))
-      ).size;
+      const sundayDays = sundayDaysSet2.size;
       const totalDias = normalDaysCount + sundayDays;
+      const totalExtraHours = Math.max(0, totalHoursRecalc - (totalDias * workHours));
       const totalEntradas = r.entries.filter(e => e.clock_in).length;
       const totalSaidas = completedEntries.length;
 
