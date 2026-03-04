@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Download, FileText, Calendar, TrendingUp } from 'lucide-react';
+import { Download, FileText, Calendar, TrendingUp, FileDown } from 'lucide-react';
 import { supabase, Profile, TimeEntry, OvertimeHours } from '../../lib/supabase';
 import * as XLSX from 'xlsx';
+import { exportToPdf } from '../../lib/pdfExport';
 
 type EmployeeReport = {
   profile: Profile;
@@ -379,6 +380,13 @@ export default function Reports() {
             >
               <Download className="w-4 h-4" />
               <span>Excel</span>
+            </button>
+            <button
+              onClick={() => exportToPdf(filteredReports, selectedMonth, selectedYear, selectedEmployee)}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center space-x-2"
+            >
+              <FileDown className="w-4 h-4" />
+              <span>PDF</span>
             </button>
             <button
               onClick={() => exportToTxt(filteredReports)}

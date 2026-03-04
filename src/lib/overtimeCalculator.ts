@@ -41,26 +41,24 @@ export async function recalculateMonthlyOvertime(
     return { overtime: 0, hourBank: 0 };
   }
 
-  const normalDays = new Map<string, number>();
-  let sundayHoursTotal = 0;
+  const normalDays = new Set<string>();
+  const sundayDays = new Set<string>();
+  let totalHours = 0;
 
   entries.forEach((entry) => {
     const hours = calculateHoursFromTimestamps(entry.clock_in, entry.clock_out!);
+    totalHours += hours;
     const dateKey = new Date(entry.clock_in).toLocaleDateString('pt-BR');
 
     if (isSunday(entry.clock_in)) {
-      sundayHoursTotal += hours;
+      sundayDays.add(dateKey);
     } else {
-      normalDays.set(dateKey, (normalDays.get(dateKey) || 0) + hours);
+      normalDays.add(dateKey);
     }
   });
 
-  const normalDaysCount = normalDays.size;
-  const normalHoursTotal = Array.from(normalDays.values()).reduce((sum, h) => sum + h, 0);
-  const expectedNormalHours = normalDaysCount * workHours;
-  const normalOvertime = Math.max(0, normalHoursTotal - expectedNormalHours);
-
-  const totalExtraHours = normalOvertime + sundayHoursTotal;
+  const totalDiasAll = normalDays.size + sundayDays.size;
+  const totalExtraHours = Math.max(0, totalHours - (totalDiasAll * workHours));
 
   const overtimePaid = Math.min(totalExtraHours, overtimeLimit);
   const hourBankAccumulated = Math.max(0, totalExtraHours - overtimeLimit);

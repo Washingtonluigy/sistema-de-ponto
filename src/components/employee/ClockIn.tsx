@@ -582,6 +582,7 @@ export default function ClockIn() {
         const pendingEntry = {
           id: `pending-out-${Date.now()}`,
           user_id: user!.id,
+          clock_in: activeSession?.clock_in_time || '',
           clock_out: clockOutTime,
           location_lat: 0,
           location_lng: 0,
