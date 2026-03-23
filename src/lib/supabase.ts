@@ -33,6 +33,7 @@ export type Profile = {
   horario_saida_almoco?: string;
   horario_volta_almoco?: string;
   horario_saida?: string;
+  blocked?: boolean;
   created_at: string;
   updated_at: string;
 };

@@ -108,9 +108,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data) {
         console.log('[AUTH] Perfil carregado do servidor:', data.role);
+
+        if (data.blocked) {
+          console.warn('[AUTH] Usuário bloqueado, deslogando...');
+          setProfile(null);
+          setLoading(false);
+          await supabase.auth.signOut();
+          return;
+        }
+
         setProfile(data);
 
-        // Tentar salvar no cache (mas não falhar se não funcionar)
         try {
           localStorage.setItem(`profile-${userId}`, JSON.stringify(data));
           console.log('[AUTH] Perfil salvo no cache');
@@ -143,14 +151,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let lastError: any;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data: authData, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+
+        if (authData.user) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('blocked')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+
+          if (profileData?.blocked) {
+            await supabase.auth.signOut();
+            throw new Error('Seu acesso foi bloqueado. Entre em contato com o administrador.');
+          }
+        }
+
         return;
       } catch (error: any) {
         lastError = error;
+        if (error.message?.includes('bloqueado')) throw error;
         console.error(`SignIn attempt ${attempt} failed:`, error);
         if (attempt < 3) {
           await new Promise(resolve => setTimeout(resolve, 1000 * attempt));

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, Upload, X, Edit2, Camera } from 'lucide-react';
+import { UserPlus, Upload, X, CreditCard as Edit2, Camera, ShieldOff, ShieldCheck } from 'lucide-react';
 import { supabase, Profile } from '../../lib/supabase';
 
 export default function EmployeeRegistration() {
@@ -202,6 +202,24 @@ export default function EmployeeRegistration() {
     });
     setPhotoPreview(employee.photo_url || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const toggleBlock = async (employee: Profile) => {
+    const newBlocked = !employee.blocked;
+    const action = newBlocked ? 'bloquear' : 'desbloquear';
+    if (!confirm(`Deseja ${action} o acesso de ${employee.full_name}?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ blocked: newBlocked, updated_at: new Date().toISOString() })
+        .eq('id', employee.id);
+
+      if (error) throw error;
+      loadEmployees();
+    } catch (err: any) {
+      alert(`Erro ao ${action}: ${err.message}`);
+    }
   };
 
   const cancelEdit = () => {
@@ -474,36 +492,67 @@ export default function EmployeeRegistration() {
             {employees.map((employee) => (
               <div
                 key={employee.id}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
+                className={`border rounded-lg p-4 hover:shadow-md transition ${
+                  employee.blocked ? 'border-red-300 bg-red-50/50' : 'border-gray-200'
+                }`}
               >
                 <div className="flex items-center space-x-3 mb-3">
-                  {employee.photo_url ? (
-                    <img
-                      src={employee.photo_url}
-                      alt={employee.full_name}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center text-white font-semibold">
-                      {employee.full_name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                  <div className="relative">
+                    {employee.photo_url ? (
+                      <img
+                        src={employee.photo_url}
+                        alt={employee.full_name}
+                        className={`w-12 h-12 rounded-full object-cover ${employee.blocked ? 'opacity-50 grayscale' : ''}`}
+                      />
+                    ) : (
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${
+                        employee.blocked
+                          ? 'bg-gradient-to-br from-gray-400 to-gray-500'
+                          : 'bg-gradient-to-br from-amber-500 to-orange-600'
+                      }`}>
+                        {employee.full_name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    {employee.blocked && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                        <ShieldOff className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-800">{employee.full_name}</p>
+                    <p className={`font-semibold ${employee.blocked ? 'text-gray-500' : 'text-gray-800'}`}>{employee.full_name}</p>
                     <p className="text-sm text-gray-600">{employee.job_position || 'Colaborador'}</p>
+                    {employee.blocked && (
+                      <span className="inline-block text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full mt-1 font-medium">
+                        Bloqueado
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1 text-sm text-gray-600 mb-3">
                   {employee.phone && <p>Tel: {employee.phone}</p>}
                   <p>Horas: {employee.work_hours}h/dia</p>
                 </div>
-                <button
-                  onClick={() => handleEdit(employee)}
-                  className="w-full bg-amber-50 text-amber-700 py-2 rounded-lg font-medium hover:bg-amber-100 transition flex items-center justify-center space-x-2"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  <span>Editar</span>
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEdit(employee)}
+                    className="flex-1 bg-amber-50 text-amber-700 py-2 rounded-lg font-medium hover:bg-amber-100 transition flex items-center justify-center space-x-2"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span>Editar</span>
+                  </button>
+                  <button
+                    onClick={() => toggleBlock(employee)}
+                    className={`py-2 px-3 rounded-lg font-medium transition flex items-center justify-center ${
+                      employee.blocked
+                        ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                        : 'bg-red-50 text-red-700 hover:bg-red-100'
+                    }`}
+                    title={employee.blocked ? 'Desbloquear acesso' : 'Bloquear acesso'}
+                  >
+                    {employee.blocked ? <ShieldCheck className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
