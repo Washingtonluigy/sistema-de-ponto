@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera, Car, Fuel, BarChart3, MinusCircle, Settings, Clock } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, FileText, LogOut, Sun, Menu, X, Camera, Car, Fuel, BarChart3, MinusCircle, Settings, Clock, ClipboardList } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminDashboard from './AdminDashboard';
 import EmployeeTracking from './EmployeeTracking';
@@ -12,8 +12,9 @@ import FuelReports from './FuelReports';
 import HourBankDeduction from './HourBankDeduction';
 import SessionManager from './SessionManager';
 import OvertimeManagement from './OvertimeManagement';
+import WorkedHoursManagement from './WorkedHoursManagement';
 
-type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos' | 'vehicles' | 'fuel' | 'fuel-reports' | 'hour-bank' | 'sessions' | 'overtime';
+type MenuItem = 'dashboard' | 'tracking' | 'registration' | 'reports' | 'photos' | 'vehicles' | 'fuel' | 'fuel-reports' | 'hour-bank' | 'sessions' | 'overtime' | 'worked-hours';
 
 export default function AdminLayout() {
   const [activeMenu, setActiveMenu] = useState<MenuItem>('dashboard');
@@ -25,6 +26,7 @@ export default function AdminLayout() {
     { id: 'tracking' as MenuItem, label: 'Acompanhar Colaboradores', icon: MapPin },
     { id: 'registration' as MenuItem, label: 'Cadastrar Colaborador', icon: Users },
     { id: 'overtime' as MenuItem, label: 'Gerenciar Horas Extras', icon: Clock },
+    { id: 'worked-hours' as MenuItem, label: 'Gerenciar Horas Trabalhadas', icon: ClipboardList },
     { id: 'hour-bank' as MenuItem, label: 'Baixa de Banco de Horas', icon: MinusCircle },
     { id: 'sessions' as MenuItem, label: 'Gerenciar Sessões', icon: Settings },
     { id: 'photos' as MenuItem, label: 'Registro', icon: Camera },
@@ -44,6 +46,8 @@ export default function AdminLayout() {
         return <EmployeeRegistration />;
       case 'overtime':
         return <OvertimeManagement />;
+      case 'worked-hours':
+        return <WorkedHoursManagement />;
       case 'hour-bank':
         return <HourBankDeduction />;
       case 'sessions':
